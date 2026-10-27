@@ -1,3 +1,5 @@
+from __future__ import annotations
+import warnings
 import numpy as np
 import pandas as pd
 from scipy.stats import iqr
@@ -226,7 +228,7 @@ def range_glucose(data):
     check_homogeneous_timegrid(data)
 
     # Return the result
-    if(data.glucose.values.size == 0):
+    if (data.glucose.values.size == 0):
         return np.nan
     return np.nanmax(data.glucose.values) - np.nanmin(data.glucose.values)
 
@@ -327,7 +329,33 @@ def auc_glucose_over_basal(data, basal):
     ts = (t1 - t0).total_seconds() / 60
 
     # Return the result
-    return np.sum(values*ts)
+    return np.sum(values * ts)
+
+
+def positive_auc_glucose(data, basal):
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
+    # Get non-nan values
+    values = data.glucose.values[~np.isnan(data.glucose.values)]
+
+    # Return nan if all values are nan
+    if values.size == 0:
+        return np.nan
+
+    # Shift the trace
+    values = values - basal
+
+    values = np.array([x if x > 0 else 0 for x in values])
+
+    # Get ts
+    t0 = pd.to_datetime(data.t.values[0]).to_pydatetime()
+    t1 = pd.to_datetime(data.t.values[1]).to_pydatetime()
+    ts = (t1 - t0).total_seconds() / 60
+
+    # Return the result
+    return np.sum(values * ts)
 
 
 def auc_glucose(data):
@@ -452,7 +480,7 @@ def cogi(data):
     check_homogeneous_timegrid(data)
 
     # Compute TIR component
-    tir = time_in_target(data)*0.5
+    tir = time_in_target(data) * 0.5
 
     # Compute TBR component
     tbr = np.min([15, time_in_hypoglycemia(data)])
@@ -512,7 +540,7 @@ def conga(data):
     n = data.glucose.values.size
     dc = np.empty(shape=(0,))
 
-    for i in range(1,n):
+    for i in range(1, n):
 
         # Find the index referring to conga_ord hours ago
         j = np.where(data.t <= (pd.to_datetime(data.t.values[i]).to_pydatetime() - timedelta(hours=conga_ord)))[0]
@@ -616,7 +644,6 @@ def mage_plus_index(data):
     last_day = pd.to_datetime(data.t.values[-1]).to_pydatetime()
     last_day = last_day.__add__(timedelta(days=1)).replace(hour=0, minute=0, second=0)
 
-
     # Calculate the number of days and preallocate
     n_days = (last_day - first_day).days
     mage_day_plus = np.empty(shape=(n_days,))
@@ -639,7 +666,7 @@ def mage_plus_index(data):
             # Step 1: turning points are only local extrema
             i_max = find_peaks(day_data)[0]
             i_min = find_peaks(-day_data)[0]
-            i_turning = np.union1d([0, n-1], np.union1d(i_max, i_min)).astype(int)
+            i_turning = np.union1d([0, n - 1], np.union1d(i_max, i_min)).astype(int)
 
             turning = day_data[i_turning]
             n_turning = i_turning.size
@@ -650,17 +677,17 @@ def mage_plus_index(data):
 
             to_be_kept = [True] * n_turning
 
-            for i in range(1, n_turning-1): # First and last samples are retained
+            for i in range(1, n_turning - 1):  # First and last samples are retained
 
                 condition_1 = abs(turning[i] - turning[i - 1]) < std_within
                 condition_2 = abs(turning[i + 1] - turning[i]) < std_within
-                to_be_kept[i] = not(condition_1 and condition_2)
+                to_be_kept[i] = not (condition_1 and condition_2)
 
             i_turning = i_turning[to_be_kept]
 
             # Step 3: Turning points are removed again or moved appropriately
             i = 1
-            while i < len(i_turning)-1:
+            while i < len(i_turning) - 1:
                 prev = i_turning[i - 1]
                 curr = i_turning[i]
                 next = i_turning[i + 1]
@@ -669,27 +696,27 @@ def mage_plus_index(data):
 
                 if prev_slope < 0 and next_slope > 0:  # Minimum
                     # The actual current turning point is the min in the interval
-                    temp = np.nanargmin(day_data[prev:(next+1)]) + prev
+                    temp = np.nanargmin(day_data[prev:(next + 1)]) + prev
                     curr = temp
                     i_turning[i] = curr
                     # The actual previous turning point is the max to the left of the current turning point.
                     temp = np.nanargmax(day_data[prev:curr]) + prev
                     i_turning[i - 1] = temp
                     # The actual following turning point is the max to the right of the current turning point.
-                    temp = np.nanargmax(day_data[(curr + 1):(next+1)]) + curr + 1
+                    temp = np.nanargmax(day_data[(curr + 1):(next + 1)]) + curr + 1
                     i_turning[i + 1] = temp
 
                     i += 1
                 elif prev_slope > 0 and next_slope < 0:  # Maximum
                     # The actual current turning point is the max in the interval
-                    temp = np.nanargmax(day_data[prev:(next+1)]) + prev
+                    temp = np.nanargmax(day_data[prev:(next + 1)]) + prev
                     curr = temp
                     i_turning[i] = curr
                     # The actual previous turning point is the min to the left of the current turning point.
                     temp = np.nanargmin(day_data[prev:curr]) + prev
                     i_turning[i - 1] = temp
                     # The actual following turning point is the min to the right of the current turning point.
-                    temp = np.nanargmin(day_data[(curr + 1):(next+1)]) + curr + 1
+                    temp = np.nanargmin(day_data[(curr + 1):(next + 1)]) + curr + 1
                     i_turning[i + 1] = temp
 
                     i += 1
@@ -710,7 +737,7 @@ def mage_plus_index(data):
                 sample1 = day_data[i_turning[-2]]
                 sample2 = day_data[i_turning[-1]]
                 if abs(sample2 - sample1) < std_within:
-                    i_turning = np.delete(i_turning, len(i_turning)-1)
+                    i_turning = np.delete(i_turning, len(i_turning) - 1)
 
             turning = day_data[i_turning]
             n_turning = len(i_turning)
@@ -720,7 +747,7 @@ def mage_plus_index(data):
             for i in range(1, n_turning - 1):
                 condition1 = abs(turning[i] - turning[i - 1]) < std_within
                 condition2 = abs(turning[i + 1] - turning[i]) < std_within
-                to_be_kept[i] = not(condition1 or condition2)
+                to_be_kept[i] = not (condition1 or condition2)
 
             i_turning = i_turning[to_be_kept]
             turning = day_data[i_turning]
@@ -788,7 +815,6 @@ def mage_minus_index(data):
     last_day = pd.to_datetime(data.t.values[-1]).to_pydatetime()
     last_day = last_day.__add__(timedelta(days=1)).replace(hour=0, minute=0, second=0)
 
-
     # Calculate the number of days and preallocate
     n_days = (last_day - first_day).days
     mage_day_minus = np.empty(shape=(n_days,))
@@ -811,7 +837,7 @@ def mage_minus_index(data):
             # Step 1: turning points are only local extrema
             i_max = find_peaks(day_data)[0]
             i_min = find_peaks(-day_data)[0]
-            i_turning = np.union1d([0, n-1], np.union1d(i_max, i_min)).astype(int)
+            i_turning = np.union1d([0, n - 1], np.union1d(i_max, i_min)).astype(int)
 
             turning = day_data[i_turning]
             n_turning = i_turning.size
@@ -822,17 +848,17 @@ def mage_minus_index(data):
 
             to_be_kept = [True] * n_turning
 
-            for i in range(1, n_turning-1): # First and last samples are retained
+            for i in range(1, n_turning - 1):  # First and last samples are retained
 
                 condition_1 = abs(turning[i] - turning[i - 1]) < std_within
                 condition_2 = abs(turning[i + 1] - turning[i]) < std_within
-                to_be_kept[i] = not(condition_1 and condition_2)
+                to_be_kept[i] = not (condition_1 and condition_2)
 
             i_turning = i_turning[to_be_kept]
 
             # Step 3: Turning points are removed again or moved appropriately
             i = 1
-            while i < len(i_turning)-1:
+            while i < len(i_turning) - 1:
                 prev = i_turning[i - 1]
                 curr = i_turning[i]
                 next = i_turning[i + 1]
@@ -841,27 +867,27 @@ def mage_minus_index(data):
 
                 if prev_slope < 0 and next_slope > 0:  # Minimum
                     # The actual current turning point is the min in the interval
-                    temp = np.nanargmin(day_data[prev:(next+1)]) + prev
+                    temp = np.nanargmin(day_data[prev:(next + 1)]) + prev
                     curr = temp
                     i_turning[i] = curr
                     # The actual previous turning point is the max to the left of the current turning point.
                     temp = np.nanargmax(day_data[prev:curr]) + prev
                     i_turning[i - 1] = temp
                     # The actual following turning point is the max to the right of the current turning point.
-                    temp = np.nanargmax(day_data[(curr + 1):(next+1)]) + curr + 1
+                    temp = np.nanargmax(day_data[(curr + 1):(next + 1)]) + curr + 1
                     i_turning[i + 1] = temp
 
                     i += 1
                 elif prev_slope > 0 and next_slope < 0:  # Maximum
                     # The actual current turning point is the max in the interval
-                    temp = np.nanargmax(day_data[prev:(next+1)]) + prev
+                    temp = np.nanargmax(day_data[prev:(next + 1)]) + prev
                     curr = temp
                     i_turning[i] = curr
                     # The actual previous turning point is the min to the left of the current turning point.
                     temp = np.nanargmin(day_data[prev:curr]) + prev
                     i_turning[i - 1] = temp
                     # The actual following turning point is the min to the right of the current turning point.
-                    temp = np.nanargmin(day_data[(curr + 1):(next+1)]) + curr + 1
+                    temp = np.nanargmin(day_data[(curr + 1):(next + 1)]) + curr + 1
                     i_turning[i + 1] = temp
 
                     i += 1
@@ -882,7 +908,7 @@ def mage_minus_index(data):
                 sample1 = day_data[i_turning[-2]]
                 sample2 = day_data[i_turning[-1]]
                 if abs(sample2 - sample1) < std_within:
-                    i_turning = np.delete(i_turning, len(i_turning)-1)
+                    i_turning = np.delete(i_turning, len(i_turning) - 1)
 
             turning = day_data[i_turning]
             n_turning = len(i_turning)
@@ -892,7 +918,7 @@ def mage_minus_index(data):
             for i in range(1, n_turning - 1):
                 condition1 = abs(turning[i] - turning[i - 1]) < std_within
                 condition2 = abs(turning[i + 1] - turning[i]) < std_within
-                to_be_kept[i] = not(condition1 or condition2)
+                to_be_kept[i] = not (condition1 or condition2)
 
             i_turning = i_turning[to_be_kept]
             turning = day_data[i_turning]
@@ -1007,7 +1033,6 @@ def ef_index(data):
     last_day = pd.to_datetime(data.t.values[-1]).to_pydatetime()
     last_day = last_day.__add__(timedelta(days=1)).replace(hour=0, minute=0, second=0)
 
-
     # Calculate the number of days and preallocate
     n_days = (last_day - first_day).days
     ef_day = np.empty(shape=(n_days,))
@@ -1030,7 +1055,7 @@ def ef_index(data):
             # Step 1: turning points are only local extrema
             i_max = find_peaks(day_data)[0]
             i_min = find_peaks(-day_data)[0]
-            i_turning = np.union1d([0, n-1], np.union1d(i_max, i_min)).astype(int)
+            i_turning = np.union1d([0, n - 1], np.union1d(i_max, i_min)).astype(int)
 
             turning = day_data[i_turning]
             n_turning = i_turning.size
@@ -1041,17 +1066,17 @@ def ef_index(data):
 
             to_be_kept = [True] * n_turning
 
-            for i in range(1, n_turning-1): # First and last samples are retained
+            for i in range(1, n_turning - 1):  # First and last samples are retained
 
                 condition_1 = abs(turning[i] - turning[i - 1]) < std_within
                 condition_2 = abs(turning[i + 1] - turning[i]) < std_within
-                to_be_kept[i] = not(condition_1 and condition_2)
+                to_be_kept[i] = not (condition_1 and condition_2)
 
             i_turning = i_turning[to_be_kept]
 
             # Step 3: Turning points are removed again or moved appropriately
             i = 1
-            while i < len(i_turning)-1:
+            while i < len(i_turning) - 1:
                 prev = i_turning[i - 1]
                 curr = i_turning[i]
                 next = i_turning[i + 1]
@@ -1060,27 +1085,27 @@ def ef_index(data):
 
                 if prev_slope < 0 and next_slope > 0:  # Minimum
                     # The actual current turning point is the min in the interval
-                    temp = np.nanargmin(day_data[prev:(next+1)]) + prev
+                    temp = np.nanargmin(day_data[prev:(next + 1)]) + prev
                     curr = temp
                     i_turning[i] = curr
                     # The actual previous turning point is the max to the left of the current turning point.
                     temp = np.nanargmax(day_data[prev:curr]) + prev
                     i_turning[i - 1] = temp
                     # The actual following turning point is the max to the right of the current turning point.
-                    temp = np.nanargmax(day_data[(curr + 1):(next+1)]) + curr + 1
+                    temp = np.nanargmax(day_data[(curr + 1):(next + 1)]) + curr + 1
                     i_turning[i + 1] = temp
 
                     i += 1
                 elif prev_slope > 0 and next_slope < 0:  # Maximum
                     # The actual current turning point is the max in the interval
-                    temp = np.nanargmax(day_data[prev:(next+1)]) + prev
+                    temp = np.nanargmax(day_data[prev:(next + 1)]) + prev
                     curr = temp
                     i_turning[i] = curr
                     # The actual previous turning point is the min to the left of the current turning point.
                     temp = np.nanargmin(day_data[prev:curr]) + prev
                     i_turning[i - 1] = temp
                     # The actual following turning point is the min to the right of the current turning point.
-                    temp = np.nanargmin(day_data[(curr + 1):(next+1)]) + curr + 1
+                    temp = np.nanargmin(day_data[(curr + 1):(next + 1)]) + curr + 1
                     i_turning[i + 1] = temp
 
                     i += 1
@@ -1101,7 +1126,7 @@ def ef_index(data):
                 sample1 = day_data[i_turning[-2]]
                 sample2 = day_data[i_turning[-1]]
                 if abs(sample2 - sample1) < std_within:
-                    i_turning = np.delete(i_turning, len(i_turning)-1)
+                    i_turning = np.delete(i_turning, len(i_turning) - 1)
 
             turning = day_data[i_turning]
             n_turning = len(i_turning)
@@ -1111,7 +1136,7 @@ def ef_index(data):
             for i in range(1, n_turning - 1):
                 condition1 = abs(turning[i] - turning[i - 1]) < std_within
                 condition2 = abs(turning[i + 1] - turning[i]) < std_within
-                to_be_kept[i] = not(condition1 or condition2)
+                to_be_kept[i] = not (condition1 or condition2)
 
             i_turning = i_turning[to_be_kept]
             turning = day_data[i_turning]
@@ -1123,7 +1148,7 @@ def ef_index(data):
             ef_day[d] = np.nan
 
     # Compute index
-    ei = np.nansum(ef_day)/n_days
+    ei = np.nansum(ef_day) / n_days
 
     # Manage all nan data
     if np.all(np.isnan(data['glucose'])):
@@ -1176,7 +1201,6 @@ def modd(data):
     n = len(data)
 
     Dm = []
-
 
     for i in range(1, n):
 
@@ -1240,13 +1264,11 @@ def sddm_index(data):
     last_day = pd.to_datetime(data.t.values[-1]).to_pydatetime()
     last_day = last_day.__add__(timedelta(days=1)).replace(hour=0, minute=0, second=0)
 
-
     # Calculate the number of days and preallocate
     n_days = (last_day - first_day).days
     mean_within = np.zeros(shape=(n_days,))
 
     for d in range(0, n_days):
-
         # Get the day of data
         low_limit = data.t >= (first_day + timedelta(days=d))
         high_limit = data.t < (first_day + timedelta(days=d + 1))
@@ -1306,13 +1328,11 @@ def sdw_index(data):
     last_day = pd.to_datetime(data.t.values[-1]).to_pydatetime()
     last_day = last_day.__add__(timedelta(days=1)).replace(hour=0, minute=0, second=0)
 
-
     # Calculate the number of days and preallocate
     n_days = (last_day - first_day).days
     std_within = np.zeros(shape=(n_days,))
 
     for d in range(0, n_days):
-
         # Get the day of data
         low_limit = data.t >= (first_day + timedelta(days=d))
         high_limit = data.t < (first_day + timedelta(days=d + 1))
@@ -1324,6 +1344,7 @@ def sdw_index(data):
 
     # Compute index
     return np.nanmean(std_within)
+
 
 def glucose_roc(data):
     """
@@ -1372,8 +1393,7 @@ def glucose_roc(data):
     if g_roc.size > 4:
 
         for t in range(3, g_roc.size):
-
-            g_roc[t] = (data.glucose.values[t] - data.glucose.values[t-3]) / 15
+            g_roc[t] = (data.glucose.values[t] - data.glucose.values[t - 3]) / 15
 
     return pd.DataFrame(data={'t': data.t.values, 'glucose_roc': g_roc})
 
@@ -1421,39 +1441,97 @@ def std_glucose_roc(data):
     return np.nanstd(roc.glucose_roc.values, ddof=1)
 
 
-def cvga(data):
+def cvga(glucose_profiles: pd.DataFrame | list[pd.DataFrame]):
     """
-    Computes the standard of glucose rate-of-change of given data (ignores nan values).
+    Control Variability Grid Analysis (CVGA) as in Magni et al. (2008).
 
     Parameters
     ----------
-    data: pd.DataFrame
-        Pandas dataframe with a column `glucose` containing the glucose data
-        to analyze (in mg/dl)
+    glucose_profiles : list of pd.DataFrame or pd.DataFrame
+        Each DataFrame must have columns 'Time' and 'glucose' (in mg/dL).
+        If a single DataFrame is provided, it is treated as a single profile.
 
     Returns
     -------
-    std_glucose_roc: float
-        The standard of glucose rate-of-change of given data.
+    profile_assessment : np.ndarray
+        Euclidean distance squared from the CVGA origin for each profile.
+    profile_coordinates : np.ndarray
+        Array of shape (n_profiles, 2) with CVGA (x, y) coordinates for each profile.
+    best_control_index : int
+        Index of the best-controlled profile (minimum distance).
+    best_controlled_coordinates : np.ndarray
+        (x, y) coordinates of the best-controlled profile.
+    """
+    def cvga_coordinates(max_bg, min_bg):
+        x = np.clip(110 - min_bg, 0, 60)
+        p = np.polyfit([110, 180, 300, 400], [0, 20, 40, 60], 3)
+        y = np.polyval(p, max_bg)
+        return x, y
 
-    Raises
-    ------
-    None
+    # Accept single DataFrame or list
+    if isinstance(glucose_profiles, pd.DataFrame):
+        glucose_profiles = [glucose_profiles]
 
-    See Also
-    --------
-    None
+    n = len(glucose_profiles)
+    min_bg = np.zeros(n)
+    max_bg = np.zeros(n)
+    profile_coordinates = np.zeros((n, 2))
+    profile_assessment = np.zeros(n)
 
-    Examples
-    --------
-    None
+    for i, profile in enumerate(glucose_profiles):
+        check_dataframe(profile)
+        if 'glucose' not in profile.columns:
+            raise ValueError('Each profile must have a glucose column.')
+        glucose_values = profile['glucose'].values
+        if glucose_values.size == 0 or np.all(np.isnan(glucose_values)):
+            min_bg[i] = np.nan
+            max_bg[i] = np.nan
+        else:
+            min_bg[i] = np.nanmin(glucose_values)
+            max_bg[i] = np.nanmax(glucose_values)
+        profile_coordinates[i, 0], profile_coordinates[i, 1] = cvga_coordinates(max_bg[i], min_bg[i])
+        profile_assessment[i] = profile_coordinates[i, 0] ** 2 + profile_coordinates[i, 1] ** 2
 
-    References
-    ----------
-    - Magni et al., "Evaluating the efficacy of closed-loop glucose
-    regulation via control-variability grid analysis", Journal of Diabetes
-    Science and Technology, 2008, vol. 2, pp. 630-635. DOI:
-    10.1177/193229680800200414.
+    has_valid_assessment = n > 0 and not np.all(np.isnan(profile_assessment))
+    best_control_index = int(np.nanargmin(profile_assessment)) if has_valid_assessment else None
+    best_controlled_coordinates = (
+        profile_coordinates[best_control_index] if best_control_index is not None else (np.nan, np.nan)
+    )
+
+    return profile_assessment, profile_coordinates, best_control_index, best_controlled_coordinates
+
+
+def ea1c(data):
+    """
+        Computes the estimaned A1C value from CGM data
+
+        Parameters
+        ----------
+        data: pd.DataFrame
+            Pandas dataframe with a column `glucose` containing the glucose data
+            to analyze (in mg/dl)
+
+        Returns
+        -------
+        eA1C: float
+            The standard of glucose rate-of-change of given data.
+
+        Raises
+        ------
+        None
+
+        See Also
+        --------
+        None
+
+        Examples
+        --------
+        None
+
+        References
+        ----------
+        - Nathan et al. "Translating the A1C assay into estimated average glucose values"
+            Diabetes Care. 2008;31(8):1473-1478. doi:10.2337/dc08-0545
     """
     # Check input
     check_dataframe(data)
@@ -1462,11 +1540,269 @@ def cvga(data):
 
     if data.t.values.size == 0:
         return np.nan
+    return (46.7 + mean_glucose(data)) / 28.7
 
-    roc = glucose_roc(data)
 
-    x = np.min([np.max([110 - np.nanmin(data.glucose.values), 0]), 60])
-    p = np.polyfit([110, 180, 300, 400], [0, 20, 40, 60], 3)
-    y = np.polyval(p, np.nanmax(data.glucose.values))
+def gvp(data):
+    """
+        Computes the glycemic variability percentage from CGM data
 
-    return x**2 + y**2
+        Parameters
+        ----------
+        data: pd.DataFrame
+            Pandas dataframe with a column `glucose` containing the glucose data
+            to analyze (in mg/dl)
+
+        Returns
+        -------
+        GVP: float
+            The GVP calculated from the data
+
+        Raises
+        ------
+        None
+
+        See Also
+        --------
+        None
+
+        Examples
+        --------
+        None
+
+        References
+        ----------
+        - Peyser et al. "Glycemic Variability Percentage: A Novel Method for Assessing Glycemic Variability from Continuous Glucose Monitor Data."
+         Diabetes Technol Ther. 2018;20(1):6-16. doi:10.1089/dia.2017.0187
+    """
+
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
+    if data.t.values.size < 2:
+        return np.nan
+
+    dx = (data.t.iloc[1] - data.t.iloc[0]).total_seconds() / 60
+    L0 = dx * len(data.t[~np.isnan(data.glucose.values)])
+    dy = np.diff(data.glucose.values[~np.isnan(data.glucose.values)])
+    L = np.sum(np.sqrt(dx ** 2 + dy ** 2))
+
+    return (L / L0 - 1) * 100
+
+
+def mag(data, n=60):
+    """
+            Computes the mean absolute glucose (MAG) as the sum of all absolute glucose changes during admission and dividing this by the total time
+
+            Parameters
+            ----------
+            data: pd.DataFrame
+                Pandas dataframe with a column `glucose` containing the glucose data
+                to analyze (in mg/dl)
+            n = int
+                number of minutes of interval to consider for the computation; effectively a down-sampling of the data.
+            Returns
+            -------
+            MAG: float
+                The MAG calculated from the data
+
+            Raises
+            ------
+            None
+
+            See Also
+            --------
+            None
+
+            Examples
+            --------
+            None
+
+            References
+            ----------
+            - Hermanides et al. "Glucose variability is associated with intensive care unit mortality"
+             Critical Care Medicine 38(3):p 838-842, March 2010. | DOI: 10.1097/CCM.0b013e3181cc4be9
+
+        """
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
+    if data.t.values.size < 2:
+        return np.nan
+    dx = (data.t.iloc[1] - data.t.iloc[0]).total_seconds() / 60
+    if n < dx:
+        n = dx
+        warnings.warn(
+            f"The parameter n is required to be at least equal to the sampling time of the data. Proceeding to calculate with n={dx}")
+
+    idx = np.arange(0, data.shape[0], step=round(n / dx))
+    idx_gl = data.iloc[idx].glucose.to_numpy().flatten()
+
+    return np.nansum(np.abs(np.diff(idx_gl))) / (np.count_nonzero(~np.isnan(idx_gl)) * n / 60)
+
+
+def mad(data):
+    """
+                Computes the mean absolute distance (MAD) as the median of distances of glucose values from their median
+
+                Parameters
+                ----------
+                data: pd.DataFrame
+                    Pandas dataframe with a column `glucose` containing the glucose data
+                    to analyze (in mg/dl)
+
+                Returns
+                -------
+                MAD: float
+                    The MAD calculated from the data
+
+                Raises
+                ------
+                None
+
+                See Also
+                --------
+                None
+
+                Examples
+                --------
+                None
+
+                References
+                ----------
+                - Millard et al. "GLU: a software package for analysing continuously measured glucose levels in epidemiology."
+                 Int J Epidemiol. 2020;49(3):744-757. doi:10.1093/ije/dyaa004
+
+            """
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
+    median = median_glucose(data)
+    return np.median(np.abs(data.glucose[~np.isnan(data.glucose)] - median))
+
+
+def distance_traveled(data):
+    """
+                   Computes the distance traveled as sum of absolute difference between CGM samples
+
+                   Parameters
+                   ----------
+                   data: pd.DataFrame
+                       Pandas dataframe with a column `glucose` containing the glucose data
+                       to analyze (in mg/dl)
+
+                   Returns
+                   -------
+                   distance_travelled: float
+                       The distance traveled calculated from the data
+
+                   Raises
+                   ------
+                   None
+
+                   See Also
+                   --------
+                   None
+
+                   Examples
+                   --------
+                   None
+
+                   References
+                   ----------
+                   - Marling et al. "Characterizing blood glucose variability using new metrics with continuous glucose monitoring data."
+                    J Diabetes Sci Technol. 2011;5(4):871-878. Published 2011 Jul 1. doi:10.1177/193229681100500408
+
+               """
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
+    if np.all(np.isnan(data.glucose.values)):
+        return np.nan
+
+    dy = np.abs(np.diff(data.glucose.values))
+    return np.nansum(dy)
+
+
+def sample_entropy(time_series, m=2, r=0.15):
+    """
+    Computes the sample entropy of a time series.
+    Parameters
+    ----------
+    time_series: np.ndarray
+        1D array of data
+    m: int
+        Embedding dimension
+    r: float
+        Tolerance (as a proportion of the std of the data)
+    Returns
+    -------
+    se: float
+        Sample entropy
+    """
+    time_series = np.asarray(time_series)
+    N = len(time_series)
+    if N <= m + 1 or np.all(np.isnan(time_series)):
+        return np.nan
+    r *= np.nanstd(time_series)
+    def _count_matches(m):
+        count = 0
+        for i in range(N - m):
+            template = time_series[i:i + m]
+            for j in range(i + 1, N - m + 1):
+                window = time_series[j:j + m]
+                if np.any(np.isnan(template)) or np.any(np.isnan(window)):
+                    continue
+                if np.max(np.abs(template - window)) <= r:
+                    count += 1
+        return count
+    B = _count_matches(m)
+    A = _count_matches(m + 1)
+    if B == 0:
+        return np.nan
+    if A == 0:
+        return -np.log(1.0 / (B + 1))  # add-one smoothing
+    return -np.log(A / B)
+
+def multiscale_entropy(data, m=2, r=0.15, max_scale=20):
+    """
+    Computes the Multi Scale Entropy (MSE) of the data
+    Parameters
+    ----------
+    data: pd.DataFrame
+          Pandas dataframe with a column `glucose` containing the glucose data
+                       to analyze (in mg/dl)
+    m: int
+        Embedding dimension for sample entropy
+    r: float
+        Tolerance (as a proportion of the std of the data)
+    max_scale: int
+        Maximum scale factor
+    Returns
+    -------
+    mse: float
+        The calculated MSE of the data
+    """
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+    values = data.glucose.values[~np.isnan(data.glucose.values)]
+    if len(values) < m + 2:
+        return np.nan
+    mse_values = []
+    for scale in range(1, max_scale + 1):
+        if len(values) // scale < m + 2:
+            break
+        # Coarse-graining
+        cg = np.mean(values[:len(values) // scale * scale].reshape(-1, scale), axis=1)
+        se = sample_entropy(cg, m=m, r=r)
+        mse_values.append(se)
+    if len(mse_values) == 0:
+        return np.nan
+    return np.nanmean(mse_values)
+
+

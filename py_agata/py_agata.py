@@ -8,6 +8,20 @@ from py_agata.risk import *
 from py_agata.glycemic_transformation import *
 from py_agata.inspection import *
 
+
+def _cvga_best_control_zone(data):
+    """
+    Wraps `cvga` to return just the best-control-zone scalar (the first
+    element of `profile_assessment`). `cvga` itself returns a 4-tuple
+    (profile_assessment, profile_coordinates, best_control_index,
+    best_controlled_coordinates), which cannot be assigned directly into a
+    per-profile scalar metric array (as done in `analyze_one_arm` and, via
+    it, `compare_two_arms`).
+    """
+    r_cvga, _, _, _ = cvga(data)
+    return r_cvga[0]
+
+
 class Agata:
     """
     Core class of AGATA.
@@ -98,7 +112,13 @@ class Agata:
         results['variability']['sddm_index'] = sddm_index(data)
         results['variability']['sdw_index'] = sdw_index(data)
         results['variability']['std_glucose_roc'] = std_glucose_roc(data)
-        results['variability']['cvga'] = cvga(data)
+        r_cvga,_,_,_ = cvga(data)
+        results['variability']['cvga'] = r_cvga[0]
+        results['variability']['gvp'] = gvp(data)
+        results['variability']['mag'] = mag(data)
+        results['variability']['mad'] = mad(data)
+        results['variability']['ea1c'] = ea1c(data)
+        results['variability']['distance_traveled'] = distance_traveled(data)
 
         # Get time metrics
         results['time_in_ranges'] = dict()
@@ -129,6 +149,10 @@ class Agata:
         results['glycemic_transformation']['hypo_index'] = hypo_index(data)
         results['glycemic_transformation']['hyper_index'] = hyper_index(data)
         results['glycemic_transformation']['mr_index'] = mr_index(data)
+        results['glycemic_transformation']['q_score'] = q_score(data)
+        results['glycemic_transformation']['gdi'] = gdi(data)
+        results['glycemic_transformation']['int_hypo'] = int_hypo(data)
+        results['glycemic_transformation']['hypo_rv'] = hypo_rv(data)
 
         # Event metrics
         results['events'] = dict()
@@ -140,6 +164,7 @@ class Agata:
         results['data_quality'] = dict()
         results['data_quality']['number_days_of_observation'] = number_days_of_observation(data)
         results['data_quality']['missing_glucose_percentage'] = missing_glucose_percentage(data)
+        results['data_quality']['number_days_at_least_data'] = number_days_at_least_data(data)
 
         # Return results
         return results
@@ -201,12 +226,14 @@ class Agata:
         results["variability"] = dict()
         metric_list = [mean_glucose, median_glucose, std_glucose, cv_glucose, range_glucose, iqr_glucose,
                        auc_glucose, gmi, cogi, conga, j_index, mage_index, mage_minus_index, mage_plus_index,
-                       ef_index, modd, sddm_index, sdw_index, std_glucose_roc, cvga]
+                       ef_index, modd, sddm_index, sdw_index, std_glucose_roc, _cvga_best_control_zone,
+                       gvp, mag, mad, ea1c, distance_traveled]
         metric_list_name = ['mean_glucose', 'median_glucose', 'std_glucose', 'cv_glucose', 'range_glucose',
                             'iqr_glucose',
                             'auc_glucose', 'gmi', 'cogi', 'conga', 'j_index', 'mage_index', 'mage_minus_index',
                             'mage_plus_index',
-                            'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga']
+                            'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga',
+                            'gvp', 'mag', 'mad', 'ea1c', 'distance_traveled']
 
         for m in range(len(metric_list_name)):
             results["variability"][metric_list_name[m]] = dict()
@@ -280,10 +307,10 @@ class Agata:
         results["glycemic_transformation"] = dict()
         metric_list = [grade_score, grade_hypo_score, grade_hyper_score,
                        grade_eu_score, igc, hypo_index,
-                       hyper_index, mr_index]
+                       hyper_index, mr_index, q_score, gdi, int_hypo, hypo_rv]
         metric_list_name = ['grade_score', 'grade_hypo_score', 'grade_hyper_score',
                             'grade_eu_score', 'igc', 'hypo_index','hyper_index',
-                            'mr_index']
+                            'mr_index', 'q_score', 'gdi', 'int_hypo', 'hypo_rv']
 
         for m in range(len(metric_list_name)):
             results["glycemic_transformation"][metric_list_name[m]] = dict()
@@ -307,8 +334,8 @@ class Agata:
 
         # Data quality
         results["data_quality"] = dict()
-        metric_list = [number_days_of_observation, missing_glucose_percentage]
-        metric_list_name = ['number_days_of_observation','missing_glucose_percentage']
+        metric_list = [number_days_of_observation, missing_glucose_percentage, number_days_at_least_data]
+        metric_list_name = ['number_days_of_observation', 'missing_glucose_percentage', 'number_days_at_least_data']
 
         for m in range(len(metric_list_name)):
             results["data_quality"][metric_list_name[m]] = dict()
@@ -520,7 +547,8 @@ class Agata:
                             'iqr_glucose',
                             'auc_glucose', 'gmi', 'cogi', 'conga', 'j_index', 'mage_index', 'mage_minus_index',
                             'mage_plus_index',
-                            'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga']
+                            'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga',
+                            'gvp', 'mag', 'mad', 'ea1c', 'distance_traveled']
 
         for m in metric_list_name:
             r1 = results["arm_1"]["variability"][m]["values"]
@@ -666,7 +694,7 @@ class Agata:
         stats["glycemic_transformation"] = dict()
         metric_list_name = ['grade_score', 'grade_hypo_score', 'grade_hyper_score',
                                         'grade_eu_score', 'igc', 'hypo_index', 'hyper_index',
-                                        'mr_index']
+                                        'mr_index', 'q_score', 'gdi', 'int_hypo', 'hypo_rv']
 
         for m in metric_list_name:
             r1 = results["arm_1"]["glycemic_transformation"][m]["values"]
@@ -714,7 +742,7 @@ class Agata:
 
         # Data quality
         stats["data_quality"] = dict()
-        metric_list_name = ['number_days_of_observation','missing_glucose_percentage']
+        metric_list_name = ['number_days_of_observation', 'missing_glucose_percentage', 'number_days_at_least_data']
 
         for m in metric_list_name:
             r1 = results["arm_1"]["data_quality"][m]["values"]

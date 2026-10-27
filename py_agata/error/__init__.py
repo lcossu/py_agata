@@ -246,6 +246,99 @@ def clarke(data, data_hat):
 
     return results
 
+
+# DTS Error Grid borders (Klonoff et al. 2024, Supplemental Table A1), as (reference, monitor) in mg/dL.
+# Lower border: vertical at reference = x_lower up to monitor 50, then a line to (600, y_600).
+# Upper border: horizontal at monitor = y_upper up to reference 50, then a line to (x_600, 600).
+# Rows are the outer borders of zones A, B, C, D, in order.
+_DTS_BORDERS = (
+    # x_lower, y_600, y_upper, x_600
+    (62.5, 480, 60, 500),
+    (97.5, 307, 86.5, 347),
+    (153, 197, 124, 241),
+    (238, 126, 179, 167),
+)
+
+
+def dts_error_grid(data, data_hat):
+    """
+    Computes the Diabetes Technology Society (DTS) Error Grid analysis (ignores nan values).
+
+    Points lying exactly on a border are assigned to the lower-risk zone.
+
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Pandas dataframe, numpy array or float containing the glucose data (reference)
+    data_hat: pd.DataFrame
+        Pandas dataframe, numpy array or float containing the inferred glucose data (monitor)
+
+    Returns
+    -------
+    dts: dict
+        A dictionary containing the results of the DTS Error Grid analysis with fields:
+        - a: float
+            The percentage of time spent in Zone A (no risk)
+        - b: float
+            The percentage of time spent in Zone B (mild risk)
+        - c: float
+            The percentage of time spent in Zone C (moderate risk)
+        - d: float
+            The percentage of time spent in Zone D (high risk)
+        - e: float
+            The percentage of time spent in Zone E (extreme risk)
+
+    Raises
+    ------
+    None
+
+    See Also
+    --------
+    clarke
+
+    Examples
+    --------
+    None
+
+    References
+    ----------
+    Klonoff et al., "The Diabetes Technology Society Error Grid and Trend Accuracy Matrix for Glucose
+    Monitors", Journal of Diabetes Science and Technology, 2024. DOI: 10.1177/19322968241275701.
+    """
+    # Check input
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+    check_dataframe(data_hat)
+    check_data_columns(data_hat)
+    check_homogeneous_timegrid(data_hat)
+    check_comparable_data(data, data_hat)
+
+    results = {zone: np.nan for zone in ("a", "b", "c", "d", "e")}
+    if data.glucose.values.size == 0:
+        return results
+    idxs = np.where(np.logical_and(~np.isnan(data.glucose.values), ~np.isnan(data_hat.glucose.values)))[0]
+    if idxs.size == 0:
+        return results
+
+    y = data.glucose.values[idxs].astype(float)
+    yp = data_hat.glucose.values[idxs].astype(float)
+
+    # Zone index = outermost border the point lies strictly outside of
+    zone = np.zeros(y.size, dtype=int)
+    for k, (x_lower, y_600, y_upper, x_600) in enumerate(_DTS_BORDERS):
+        lower = 50 + (y - x_lower) * (y_600 - 50) / (600 - x_lower)
+        upper = np.maximum(y_upper, y_upper + (y - 50) * (600 - y_upper) / (x_600 - 50))
+        outside = ((y > x_lower) & (yp < lower)) | (yp > upper)
+        zone[outside] = k + 1
+
+    counts = np.bincount(zone, minlength=5) / y.size * 100
+    for k, z in enumerate(("a", "b", "c", "d", "e")):
+        results[z] = counts[k]
+
+    return results
+
+
 def c2_sigmoid(x_vector, a, d, type):
 
     if a.size == 1:

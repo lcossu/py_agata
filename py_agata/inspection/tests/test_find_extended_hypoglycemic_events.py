@@ -140,3 +140,14 @@ def test_find_extended_hypoglycemic_events():
     assert results['time_start'][-1] == datetime(2000, 1, 1, 4, 35, 0)
     assert results['time_end'][-1] == datetime(2000, 1, 1, 4, 35, 0) + timedelta(minutes=150)
     assert results['duration'][-1] == 150
+
+def test_find_extended_hypoglycemic_events_default_threshold():
+
+    # 150 min at 60 mg/dl is an extended event below 70 but not below 54
+    t = pd.date_range('2000-01-01', periods=96, freq='5min')
+    glucose = np.ones(shape=(t.size,)) * 120
+    glucose[12:42] = 60
+    data = pd.DataFrame({'t': t, 'glucose': glucose})
+
+    assert find_extended_hypoglycemic_events(data)['time_start'].size == 1
+    assert find_extended_hypoglycemic_events(data, th=54.)['time_start'].size == 0

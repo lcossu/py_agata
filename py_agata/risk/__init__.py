@@ -1,9 +1,12 @@
 import numpy as np
 import pandas as pd
-from datetime import datetime,timedelta
+from datetime import datetime, timedelta
 
-from py_agata.time_in_ranges import time_in_l1_hypoglycemia, time_in_l2_hypoglycemia, time_in_l1_hyperglycemia, time_in_l2_hyperglycemia
+from py_agata.glycemic_transformation import glucose_pentagon
+from py_agata.time_in_ranges import time_in_l1_hypoglycemia, time_in_l2_hypoglycemia, time_in_l1_hyperglycemia, \
+    time_in_l2_hyperglycemia
 from py_agata.input_validator import *
+
 
 def adrr(data):
     """
@@ -57,18 +60,17 @@ def adrr(data):
     last_day = pd.to_datetime(data.t.values[-1]).to_pydatetime()
     last_day = last_day.__add__(timedelta(days=1)).replace(hour=0, minute=0, second=0)
 
-
     # Calculate the number of days and preallocate the daily max lbgi and hbgi
-    n_days = (last_day-first_day).days
+    n_days = (last_day - first_day).days
     max_lbgi_day = np.empty(shape=(n_days,))
     max_hbgi_day = np.empty(shape=(n_days,))
 
-    for d in range(0,n_days):
+    for d in range(0, n_days):
 
         # Get the day of data
         low_limit = data.t >= (first_day + timedelta(days=d))
-        high_limit = data.t < (first_day + timedelta(days=d+1))
-        flags = np.logical_and(low_limit,high_limit)
+        high_limit = data.t < (first_day + timedelta(days=d + 1))
+        flags = np.logical_and(low_limit, high_limit)
         day_data = data.glucose.values[flags]
 
         # Get rid of nans
@@ -77,12 +79,12 @@ def adrr(data):
         if not non_nan_glucose.size == 0:
 
             # Symmetrization
-            f = gamma*(np.log(non_nan_glucose)**alpha-beta)
+            f = gamma * (np.log(non_nan_glucose) ** alpha - beta)
 
             # Risk computation
-            rl = 10*(f**2)
+            rl = 10 * (f ** 2)
             rl[non_nan_glucose > th] = 0
-            rh = 10*(f**2)
+            rh = 10 * (f ** 2)
             rh[non_nan_glucose < th] = 0
 
             # Get the max risks
@@ -145,10 +147,10 @@ def lbgi(data):
     non_nan_glucose = data.glucose.values[~np.isnan(data.glucose.values)]
 
     # Symmetrization
-    f = gamma*(np.log(non_nan_glucose)**alpha-beta)
+    f = gamma * (np.log(non_nan_glucose) ** alpha - beta)
 
     # Risk computation
-    rl = 10*(f**2)
+    rl = 10 * (f ** 2)
     rl[non_nan_glucose > th] = 0
 
     # Return lbgi
@@ -202,10 +204,10 @@ def hbgi(data):
     non_nan_glucose = data.glucose.values[~np.isnan(data.glucose.values)]
 
     # Symmetrization
-    f = gamma*(np.log(non_nan_glucose)**alpha-beta)
+    f = gamma * (np.log(non_nan_glucose) ** alpha - beta)
 
     # Risk computation
-    rh = 10*(f**2)
+    rh = 10 * (f ** 2)
     rh[non_nan_glucose < th] = 0
 
     # Return hbgi
@@ -292,19 +294,20 @@ def gri(data):
     check_data_columns(data)
     check_homogeneous_timegrid(data)
 
-    #Compute metric
-    v_low = time_in_l2_hypoglycemia(data) # VLow( < 54 mg / dL; < 3.0 mmol / L)
-    low = time_in_l1_hypoglycemia(data) # Low(54–70 mg / dL; 3.0–3.9 mmol / L)
-    v_high = time_in_l2_hyperglycemia(data) # VHigh( > 250 mg / dL; > 13.9 mmol / L)
-    high = time_in_l1_hyperglycemia(data) # High( > 180–250 mg / dL; > 10.0–13.9 mmol / L)
+    # Compute metric
+    v_low = time_in_l2_hypoglycemia(data)  # VLow( < 54 mg / dL; < 3.0 mmol / L)
+    low = time_in_l1_hypoglycemia(data)  # Low(54–70 mg / dL; 3.0–3.9 mmol / L)
+    v_high = time_in_l2_hyperglycemia(data)  # VHigh( > 250 mg / dL; > 13.9 mmol / L)
+    high = time_in_l1_hyperglycemia(data)  # High( > 180–250 mg / dL; > 10.0–13.9 mmol / L)
 
     gri = (3.0 * v_low) + (2.4 * low) + (1.6 * v_high) + (0.8 * high)
 
-    #Limit gri between 0 - 100 and return
+    # Limit gri between 0 - 100 and return
     return np.min([gri, 100])
 
 
-def dynamic_risk(data, amplification_function='tanh', maximum_amplification=2.5, amplification_rapidity=2., maximum_damping=0.6):
+def dynamic_risk(data, amplification_function='tanh', maximum_amplification=2.5, amplification_rapidity=2.,
+                 maximum_damping=0.6):
     """
     Computes the dynamic risk of the glucose concentration (ignoring nan values).
 
@@ -368,11 +371,11 @@ def dynamic_risk(data, amplification_function='tanh', maximum_amplification=2.5,
     rl = np.zeros(shape=(data.glucose.values.size,))
     rh = np.zeros(shape=(data.glucose.values.size,))
 
-
     # Compute rate-of-change
-    ts = (pd.to_datetime(data.t.values[1]).to_pydatetime() - pd.to_datetime(data.t.values[0]).to_pydatetime()).total_seconds()/60
-    roc = np.diff(data.glucose.values)/ts
-    roc = np.append(0,roc)
+    ts = (pd.to_datetime(data.t.values[1]).to_pydatetime() - pd.to_datetime(
+        data.t.values[0]).to_pydatetime()).total_seconds() / 60
+    roc = np.diff(data.glucose.values) / ts
+    roc = np.append(0, roc)
 
     # Symmetrization
     f = gamma * (np.log(data.glucose.values) ** alpha - beta)
@@ -382,13 +385,68 @@ def dynamic_risk(data, amplification_function='tanh', maximum_amplification=2.5,
     rh[f < 0] = 0
 
     # Compute static risk
-    sr = rh-rl
+    sr = rh - rl
     modulation_factor = np.ones(shape=(data.glucose.values.size,))
-    dr_over_dg = np.divide(10 * (gamma**2) * 2 * alpha * (np.log(data.glucose.values)**(2 * alpha - 1) - beta * np.log(data.glucose.values)**(alpha - 1)), data.glucose.values)
+    dr_over_dg = np.divide(10 * (gamma ** 2) * 2 * alpha * (
+            np.log(data.glucose.values) ** (2 * alpha - 1) - beta * np.log(data.glucose.values) ** (alpha - 1)),
+                           data.glucose.values)
 
     # Compute dynamic risk and return it
     if amplification_function == 'tanh':
-        modulation_factor = np.real(dr_delta*np.tanh(amplification_rapidity * np.multiply(dr_over_dg, roc) + dr_gamma)) + dr_beta
+        modulation_factor = np.real(
+            dr_delta * np.tanh(amplification_rapidity * np.multiply(dr_over_dg, roc) + dr_gamma)) + dr_beta
     elif amplification_function == 'exp':
         modulation_factor = np.exp(maximum_amplification * np.multiply(dr_over_dg, roc))
     return np.multiply(sr, modulation_factor)
+
+
+def glycemic_risk_parameter(data, a1c=None):
+    """
+    Computes the glycemic risk parameter (GRP) from the data
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Pandas dataframe with a column `glucose` containing the glucose data
+        to analyze (in mg/dl)
+    a1c: float
+        HbA1c of the patient
+
+    Returns
+    -------
+    grp: GRP evaluated from the data with reference to the healthy subject
+
+    References
+    ----------
+    Thomas et al. "The “Glucose Pentagon”: Assessing Glycemic Control of Patients with Diabetes
+    Mellitus by a Model Integrating Different Parameters from Glucose Profiles" (2009) Diabetes Technology & Therapeutics,
+    11(6), 399–409. doi:10.1089/dia.2008.0119
+    """
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
+    m, sd, tar, auc160, a1c = glucose_pentagon(a1c)
+    area = _spider_plot_area([m, sd, tar, auc160, a1c]) / _spider_plot_area([90, 5.5, 10, 0, 0])
+    return area
+
+
+def _spider_plot_area(values):
+    """
+    Calculates the area of a spider plot, from its vertexes values
+    Parameters
+    ----------
+    values
+
+    Returns
+    -------
+
+    """
+    n = len(values)
+    import math
+    angles = [2 * math.pi * i / n for i in range(n)]
+    points = [(values[i] * math.cos(angles[i]), values[i] * math.sin(angles[i])) for i in range(n)]
+
+    area = 0.5 * abs(
+        sum(points[i][0] * points[(i + 1) % n][1] - points[(i + 1) % n][0] * points[i][1] for i in range(n)))
+
+    return area

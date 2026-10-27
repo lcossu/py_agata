@@ -173,6 +173,13 @@ def test_analyze_glucose_profile():
     assert type(results['data_quality']) is dict
     assert np.round(results['data_quality']['number_days_of_observation'] * 100) / 100 == 0.03
     assert np.round(results['data_quality']['missing_glucose_percentage'] * 100) / 100 == 9.09
+    assert results['data_quality']['number_days_at_least_data'] == 1
+
+    # Variability and transformation fields added in 0.1.0
+    for k in ['gvp', 'mag', 'mad', 'ea1c', 'distance_traveled']:
+        assert k in results['variability']
+    for k in ['q_score', 'gdi', 'int_hypo', 'hypo_rv']:
+        assert k in results['glycemic_transformation']
 
     # Events fields
     # assert type(results['events']) is dict

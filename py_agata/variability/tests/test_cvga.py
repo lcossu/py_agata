@@ -49,8 +49,8 @@ def test_cvga():
     data = pd.DataFrame(data=d)
 
     #Tests
-    assert np.isnan(cvga(data)) == False
-    assert np.round(cvga(data)*1000)/1000 == 4759.436
+    assert np.isnan(cvga(data)[0][0]) == False
+    assert np.round(cvga(data)[0][0]*1000)/1000 == 4759.436
 
     # Set empty data
     t = np.arange(datetime(2000, 1, 1, 1, 0, 0), datetime(2000, 1, 1, 1, 55, 0), timedelta(minutes=5)).astype(
@@ -67,4 +67,4 @@ def test_cvga():
     data = pd.DataFrame(data=d)
 
     # Tests
-    assert np.isnan(cvga(data))
+    assert np.isnan(cvga(data)[0][0])

@@ -202,7 +202,7 @@ def find_hypoglycemic_events(data, th=70.):
             The duration of each found hypoglycemic event
         - mean_duration: float
             The mean duration of hypoglycemic events
-        - number_per_week: float
+        - events_per_week: float
             The number of hypoglycemic events per week
 
     Raises
@@ -447,7 +447,7 @@ def find_hyperglycemic_events(data, th=180.):
     return hyperglycemic_events
 
 
-def find_extended_hypoglycemic_events(data, th=54.):
+def find_extended_hypoglycemic_events(data, th=70.):
     """
     Finds the extended hypoglycemic events in a given glucose trace. The definition of hypoglycemic event can be found
     in Battellino et al. (event begins: at least consecutive 120 minutes < threshold mg/dl, event ends: at least
@@ -457,7 +457,7 @@ def find_extended_hypoglycemic_events(data, th=54.):
     ----------
     data: pd.DataFrame
         Pandas dataframe, numpy array or float containing the glucose data
-    th: float, optional, default : 54
+    th: float, optional, default : 70
         A number defining the threshold to be used to find hypoglycemia (in mg/dl)
 
     Returns
@@ -809,3 +809,47 @@ def find_hyperglycemic_events_by_level(data, glycemic_target='diabetes'):
     hyperglycemic_events['l2'] = copy(l2_hyper_events)
 
     return hyperglycemic_events
+
+
+def number_days_at_least_data(data, th=80):
+    """
+    Computes the number of days with more than [th]% of valid (non-NaN) glucose data.
+
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Pandas dataframe containing glucose data with columns 't' (timestamps) and 'glucose'.
+    th: int
+        Threshold percentage of minimum valid data per day.
+
+    Returns
+    -------
+    n: int
+        The number of days with more than [th]% valid data. nan if data is empty.
+
+    Raises
+    ------
+    None
+    """
+
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
+    if data.glucose.values.size == 0:
+        return np.nan
+
+    # Group by calendar day without modifying the input
+    date = pd.to_datetime(data['t']).dt.date
+
+    # Count total entries per day
+    total_per_day = data.groupby(date).size()
+
+    # Count non-NaN entries per day
+    valid_per_day = data.groupby(date)['glucose'].count()
+
+    # Compute percentage of valid data per day
+    valid_percentage = (valid_per_day / total_per_day) * 100
+
+    # Count days where the percentage of valid data is greater than the threshold
+    return int((valid_percentage > th).sum())

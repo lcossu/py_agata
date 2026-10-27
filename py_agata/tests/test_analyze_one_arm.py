@@ -60,7 +60,7 @@ def test_analyze_one_arm():
                         'iqr_glucose',
                         'auc_glucose', 'gmi', 'cogi', 'conga', 'j_index', 'mage_index', 'mage_minus_index',
                         'mage_plus_index',
-                        'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga']
+                        'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga', 'gvp', 'mag', 'mad', 'ea1c', 'distance_traveled']
     for m in metric_list_name:
         assert results["variability"][m]["values"].size == 2
 
@@ -79,12 +79,12 @@ def test_analyze_one_arm():
     # Glycemic transformation
     metric_list_name = ['grade_score', 'grade_hypo_score', 'grade_hyper_score',
                             'grade_eu_score', 'igc', 'hypo_index','hyper_index',
-                            'mr_index']
+                            'mr_index', 'q_score', 'gdi', 'int_hypo', 'hypo_rv']
     for m in metric_list_name:
         assert results["glycemic_transformation"][m]["values"].size == 2
 
     # Data quality
-    metric_list_name = ['number_days_of_observation', 'missing_glucose_percentage']
+    metric_list_name = ['number_days_of_observation', 'missing_glucose_percentage', 'number_days_at_least_data']
     for m in metric_list_name:
         assert results["data_quality"][m]["values"].size == 2
 
