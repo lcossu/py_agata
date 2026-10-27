@@ -9,9 +9,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "py_agata"
-version = "0.0.8"
+version = "0.1.0rc1"
 authors = [
   { name="Giacomo Cappon", email="cappongiacomo@gmail.com" },
+  { name="Luca Cossu", email="luca.cossu@unipd.it" },
 ]
 description = "AGATA (Automated Glucose dATa Analysis): a toolbox to analyse glucose data."
 readme = "README.md"
@@ -23,7 +24,7 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering",
 ]
-dynamic = ["dependencies"]
+dynamic = ["dependencies", "optional-dependencies"]
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 optional-dependencies = {dev = { file = ["requirements-dev.txt"] }}

@@ -15,3 +15,8 @@ __pycache__/
 #Build and dists
 dist/
 py_agata.egg-info/
+# IDE and build output
+.idea/
+build/
+uv.lock
+.coverage
