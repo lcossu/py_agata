@@ -1,6 +1,6 @@
 import numpy as np
 from statsmodels.stats.diagnostic import lilliefors
-from scipy.stats import ttest_ind, wilcoxon, mannwhitneyu,ranksums
+from scipy.stats import ttest_ind, ttest_rel, wilcoxon, mannwhitneyu
 
 from py_agata.variability import *
 from py_agata.time_in_ranges import *
@@ -22,6 +22,32 @@ def _cvga_best_control_zone(data):
     return r_cvga[0]
 
 
+def _compare_samples(r1, r2, is_paired, alpha):
+    """
+    Tests the difference between two samples as AGATA compareTwoArms does. Uses a t-test when either sample has fewer
+    than 4 values or both pass the Lilliefors normality test, and a Wilcoxon signed-rank (paired) or Mann-Whitney U
+    (unpaired) test otherwise. Nan values are ignored. Returns a dict with the p-value `p` and the rejection flag `h`.
+    """
+    n1, n2 = np.sum(~np.isnan(r1)), np.sum(~np.isnan(r2))
+    p1 = lilliefors(r1[~np.isnan(r1)])[1] if n1 >= 4 else 0
+    p2 = lilliefors(r2[~np.isnan(r2)])[1] if n2 >= 4 else 0
+    gaussian = (p1 > 0.05 or np.isnan(p1)) and (p2 > 0.05 or np.isnan(p2))
+
+    if n1 < 4 or n2 < 4 or gaussian:
+        p = (ttest_rel if is_paired else ttest_ind)(r1, r2, nan_policy="omit").pvalue
+    elif is_paired:
+        both = ~np.isnan(r1) & ~np.isnan(r2)
+
+        # scipy's wilcoxon fails on all-zero differences; MATLAB signrank returns p = 1
+        if np.any(both) and np.all(r1[both] == r2[both]):
+            return {"p": 1., "h": 0}
+        p = wilcoxon(r1, r2, nan_policy="omit").pvalue
+    else:
+        p = mannwhitneyu(r1, r2, nan_policy="omit").pvalue
+
+    return {"p": p, "h": np.nan if np.isnan(p) else 1 * (p < alpha)}
+
+
 class Agata:
     """
     Core class of AGATA.
@@ -35,7 +61,7 @@ class Agata:
     Methods
     -------
     analyze_glucose_profile():
-        Runs ReplayBG.
+        Analyzes a single glucose profile.
     """
 
     def __init__(self, glycemic_target='diabetes'):
@@ -536,6 +562,9 @@ class Agata:
             check_data_columns(d)
             check_homogeneous_timegrid(d)
 
+        if is_paired and len(arm_1) != len(arm_2):
+            raise ValueError("compare_two_arms: arm_1 and arm_2 must have the same length when is_paired is True.")
+
         results = dict()
         results["arm_1"] = self.analyze_one_arm(arm_1)
         results["arm_2"] = self.analyze_one_arm(arm_2)
@@ -554,44 +583,7 @@ class Agata:
             r1 = results["arm_1"]["variability"][m]["values"]
             r2 = results["arm_2"]["variability"][m]["values"]
 
-            # Correct for lilliefors behaviour
-            if(r1[~np.isnan(r1)].size >= 4):
-                ks, p1 = lilliefors(r1[~np.isnan(r1)])
-            else:
-                p1 = 0
-            if (r2[~np.isnan(r2)].size >= 4):
-                ks, p2 = lilliefors(r2[~np.isnan(r2)])
-            else:
-                p2 = 0
-
-            stats["variability"][m] = dict()
-            if np.sum(~np.isnan(r1)) < 4 or np.sum(~np.isnan(r2)) < 4 or ((p1 > 0.05 or np.isnan(p1)) and (p2 > 0.05 or np.isnan(p2))):
-                t = ttest_ind(r1, r2, nan_policy="omit")
-                stats["variability"][m]["p"] = t.pvalue
-                if np.isnan(stats["variability"][m]["p"]):
-                    stats["variability"][m]["h"] = np.nan
-                else:
-                    stats["variability"][m]["h"] = 1 * (t.pvalue < alpha)
-            else:
-                if is_paired:
-                    idxs = np.where(np.logical_and(~np.isnan(r1), ~np.isnan(r2)))[0]
-                    if np.all(r1[idxs] - r2[idxs]) == 0:
-                        stats["variability"][m]["h"] = 0
-                        stats["variability"][m]["p"] = 1
-                    else:
-                        t = wilcoxon(r1, r2, nan_policy="omit")
-                        stats["variability"][m]["p"] = t.pvalue
-                        if np.isnan(stats["variability"][m]["p"]):
-                            stats["variability"][m]["h"] = np.nan
-                        else:
-                            stats["variability"][m]["h"] = 1 * (t.pvalue < alpha)
-                else:
-                    t = mannwhitneyu(r1, r2)
-                    stats["variability"][m]["p"] = t.pvalue
-                    if np.isnan(stats["variability"][m]["p"]):
-                        stats["variability"][m]["h"] = np.nan
-                    else:
-                        stats["variability"][m]["h"] = 1 * (t.pvalue < alpha)
+            stats["variability"][m] = _compare_samples(r1, r2, is_paired, alpha)
 
         # Time in ranges
         stats["time_in_ranges"] = dict()
@@ -603,45 +595,7 @@ class Agata:
             r1 = results["arm_1"]["time_in_ranges"][m]["values"]
             r2 = results["arm_2"]["time_in_ranges"][m]["values"]
 
-            # Correct for lilliefors behaviour
-            if (r1[~np.isnan(r1)].size >= 4):
-                ks, p1 = lilliefors(r1[~np.isnan(r1)])
-            else:
-                p1 = 0
-            if (r2[~np.isnan(r2)].size >= 4):
-                ks, p2 = lilliefors(r2[~np.isnan(r2)])
-            else:
-                p2 = 0
-
-            stats["time_in_ranges"][m] = dict()
-            if np.sum(~np.isnan(r1)) < 4 or np.sum(~np.isnan(r2)) < 4 or (
-                    (p1 > 0.05 or np.isnan(p1)) and (p2 > 0.05 or np.isnan(p2))):
-                t = ttest_ind(r1, r2, nan_policy="omit")
-                stats["time_in_ranges"][m]["p"] = t.pvalue
-                if np.isnan(stats["time_in_ranges"][m]["p"]):
-                    stats["time_in_ranges"][m]["h"] = np.nan
-                else:
-                    stats["time_in_ranges"][m]["h"] = 1 * (t.pvalue < alpha)
-            else:
-                if is_paired:
-                    idxs = np.where(np.logical_and(~np.isnan(r1), ~np.isnan(r2)))[0]
-                    if np.all(r1[idxs] - r2[idxs]) == 0:
-                        stats["time_in_ranges"][m]["h"] = 0
-                        stats["time_in_ranges"][m]["p"] = 1
-                    else:
-                        t = wilcoxon(r1, r2, nan_policy="omit")
-                        stats["time_in_ranges"][m]["p"] = t.pvalue
-                        if np.isnan(stats["time_in_ranges"][m]["p"]):
-                            stats["time_in_ranges"][m]["h"] = np.nan
-                        else:
-                            stats["time_in_ranges"][m]["h"] = 1 * (t.pvalue < alpha)
-                else:
-                    t = mannwhitneyu(r1, r2)
-                    stats["time_in_ranges"][m]["p"] = t.pvalue
-                    if np.isnan(stats["time_in_ranges"][m]["p"]):
-                        stats["time_in_ranges"][m]["h"] = np.nan
-                    else:
-                        stats["time_in_ranges"][m]["h"] = 1 * (t.pvalue < alpha)
+            stats["time_in_ranges"][m] = _compare_samples(r1, r2, is_paired, alpha)
         # Risk
         stats["risk"] = dict()
         metric_list_name = ['adrr', 'lbgi', 'hbgi', 'bgri', 'gri']
@@ -650,45 +604,7 @@ class Agata:
             r1 = results["arm_1"]["risk"][m]["values"]
             r2 = results["arm_2"]["risk"][m]["values"]
 
-            # Correct for lilliefors behaviour
-            if (r1[~np.isnan(r1)].size >= 4):
-                ks, p1 = lilliefors(r1[~np.isnan(r1)])
-            else:
-                p1 = 0
-            if (r2[~np.isnan(r2)].size >= 4):
-                ks, p2 = lilliefors(r2[~np.isnan(r2)])
-            else:
-                p2 = 0
-
-            stats["risk"][m] = dict()
-            if np.sum(~np.isnan(r1)) < 4 or np.sum(~np.isnan(r2)) < 4 or (
-                    (p1 > 0.05 or np.isnan(p1)) and (p2 > 0.05 or np.isnan(p2))):
-                t = ttest_ind(r1, r2, nan_policy="omit")
-                stats["risk"][m]["p"] = t.pvalue
-                if np.isnan(stats["risk"][m]["p"]):
-                    stats["risk"][m]["h"] = np.nan
-                else:
-                    stats["risk"][m]["h"] = 1 * (t.pvalue < alpha)
-            else:
-                if is_paired:
-                    idxs = np.where(np.logical_and(~np.isnan(r1), ~np.isnan(r2)))[0]
-                    if np.all(r1[idxs] - r2[idxs]) == 0:
-                        stats["risk"][m]["h"] = 0
-                        stats["risk"][m]["p"] = 1
-                    else:
-                        t = wilcoxon(r1, r2, nan_policy="omit")
-                        stats["risk"][m]["p"] = t.pvalue
-                        if np.isnan(stats["risk"][m]["p"]):
-                            stats["risk"][m]["h"] = np.nan
-                        else:
-                            stats["risk"][m]["h"] = 1 * (t.pvalue < alpha)
-                else:
-                    t = mannwhitneyu(r1, r2)
-                    stats["risk"][m]["p"] = t.pvalue
-                    if np.isnan(stats["risk"][m]["p"]):
-                        stats["risk"][m]["h"] = np.nan
-                    else:
-                        stats["risk"][m]["h"] = 1 * (t.pvalue < alpha)
+            stats["risk"][m] = _compare_samples(r1, r2, is_paired, alpha)
 
         # Glycemic transformation
         stats["glycemic_transformation"] = dict()
@@ -700,45 +616,7 @@ class Agata:
             r1 = results["arm_1"]["glycemic_transformation"][m]["values"]
             r2 = results["arm_2"]["glycemic_transformation"][m]["values"]
 
-            # Correct for lilliefors behaviour
-            if (r1[~np.isnan(r1)].size >= 4):
-                ks, p1 = lilliefors(r1[~np.isnan(r1)])
-            else:
-                p1 = 0
-            if (r2[~np.isnan(r2)].size >= 4):
-                ks, p2 = lilliefors(r2[~np.isnan(r2)])
-            else:
-                p2 = 0
-
-            stats["glycemic_transformation"][m] = dict()
-            if np.sum(~np.isnan(r1)) < 4 or np.sum(~np.isnan(r2)) < 4 or (
-                    (p1 > 0.05 or np.isnan(p1)) and (p2 > 0.05 or np.isnan(p2))):
-                t = ttest_ind(r1, r2, nan_policy="omit")
-                stats["glycemic_transformation"][m]["p"] = t.pvalue
-                if np.isnan(stats["glycemic_transformation"][m]["p"]):
-                    stats["glycemic_transformation"][m]["h"] = np.nan
-                else:
-                    stats["glycemic_transformation"][m]["h"] = 1 * (t.pvalue < alpha)
-            else:
-                if is_paired:
-                    idxs = np.where(np.logical_and(~np.isnan(r1), ~np.isnan(r2)))[0]
-                    if np.all(r1[idxs] - r2[idxs]) == 0:
-                        stats["glycemic_transformation"][m]["h"] = 0
-                        stats["glycemic_transformation"][m]["p"] = 1
-                    else:
-                        t = wilcoxon(r1, r2, nan_policy="omit")
-                        stats["glycemic_transformation"][m]["p"] = t.pvalue
-                        if np.isnan(stats["glycemic_transformation"][m]["p"]):
-                            stats["glycemic_transformation"][m]["h"] = np.nan
-                        else:
-                            stats["glycemic_transformation"][m]["h"] = 1 * (t.pvalue < alpha)
-                else:
-                    t = mannwhitneyu(r1, r2)
-                    stats["glycemic_transformation"][m]["p"] = t.pvalue
-                    if np.isnan(stats["glycemic_transformation"][m]["p"]):
-                        stats["glycemic_transformation"][m]["h"] = np.nan
-                    else:
-                        stats["glycemic_transformation"][m]["h"] = 1 * (t.pvalue < alpha)
+            stats["glycemic_transformation"][m] = _compare_samples(r1, r2, is_paired, alpha)
 
         # Data quality
         stats["data_quality"] = dict()
@@ -748,45 +626,7 @@ class Agata:
             r1 = results["arm_1"]["data_quality"][m]["values"]
             r2 = results["arm_2"]["data_quality"][m]["values"]
 
-            # Correct for lilliefors behaviour
-            if (r1[~np.isnan(r1)].size >= 4):
-                ks, p1 = lilliefors(r1[~np.isnan(r1)])
-            else:
-                p1 = 0
-            if (r2[~np.isnan(r2)].size >= 4):
-                ks, p2 = lilliefors(r2[~np.isnan(r2)])
-            else:
-                p2 = 0
-
-            stats["data_quality"][m] = dict()
-            if np.sum(~np.isnan(r1)) < 4 or np.sum(~np.isnan(r2)) < 4 or (
-                    (p1 > 0.05 or np.isnan(p1)) and (p2 > 0.05 or np.isnan(p2))):
-                t = ttest_ind(r1, r2, nan_policy="omit")
-                stats["data_quality"][m]["p"] = t.pvalue
-                if np.isnan(stats["data_quality"][m]["p"]):
-                    stats["data_quality"][m]["h"] = np.nan
-                else:
-                    stats["data_quality"][m]["h"] = 1 * (t.pvalue < alpha)
-            else:
-                if is_paired:
-                    idxs = np.where(np.logical_and(~np.isnan(r1), ~np.isnan(r2)))[0]
-                    if np.all(r1[idxs] - r2[idxs]) == 0:
-                        stats["data_quality"][m]["h"] = 0
-                        stats["data_quality"][m]["p"] = 1
-                    else:
-                        t = wilcoxon(r1, r2, nan_policy="omit")
-                        stats["data_quality"][m]["p"] = t.pvalue
-                        if np.isnan(stats["data_quality"][m]["p"]):
-                            stats["data_quality"][m]["h"] = np.nan
-                        else:
-                            stats["data_quality"][m]["h"] = 1 * (t.pvalue < alpha)
-                else:
-                    t = mannwhitneyu(r1, r2)
-                    stats["data_quality"][m]["p"] = t.pvalue
-                    if np.isnan(stats["data_quality"][m]["p"]):
-                        stats["data_quality"][m]["h"] = np.nan
-                    else:
-                        stats["data_quality"][m]["h"] = 1 * (t.pvalue < alpha)
+            stats["data_quality"][m] = _compare_samples(r1, r2, is_paired, alpha)
 
         # Events
         stats["events"] = dict()
@@ -808,44 +648,7 @@ class Agata:
                 for m in metric_list_name:
                     r1 = results["arm_1"]["events"][c][s][m]["values"]
                     r2 = results["arm_2"]["events"][c][s][m]["values"]
-                    # Correct for lilliefors behaviour
-                    if (r1[~np.isnan(r1)].size >= 4):
-                        ks, p1 = lilliefors(r1[~np.isnan(r1)])
-                    else:
-                        p1 = 0
-                    if (r2[~np.isnan(r2)].size >= 4):
-                        ks, p2 = lilliefors(r2[~np.isnan(r2)])
-                    else:
-                        p2 = 0
-
-                    stats["events"][c][s][m] = dict()
-                    if np.sum(~np.isnan(r1)) < 4 or np.sum(~np.isnan(r2)) < 4 or ((p1 > 0.05 or np.isnan(p1)) and (p2 > 0.05 or np.isnan(p2))):
-                        t = ttest_ind(r1, r2, nan_policy="omit")
-                        stats["events"][c][s][m]["p"] = t.pvalue
-                        if np.isnan(stats["events"][c][s][m]["p"]):
-                            stats["events"][c][s][m]["h"] = np.nan
-                        else:
-                            stats["events"][c][s][m]["h"] = 1 * (t.pvalue < alpha)
-                    else:
-                        if is_paired:
-                            idxs = np.where(np.logical_and(~np.isnan(r1), ~np.isnan(r2)))[0]
-                            if np.all(r1[idxs] - r2[idxs]) == 0:
-                                stats["events"][c][s][m]["h"] = np.nan
-                                stats["events"][c][s][m]["p"] = np.nan
-                            else:
-                                t = wilcoxon(r1, r2, nan_policy="omit")
-                                stats["events"][c][s][m]["p"] = t.pvalue
-                                if np.isnan(stats["events"][c][s][m]["p"]):
-                                    stats["events"][c][s][m]["h"] = np.nan
-                                else:
-                                    stats["events"][c][s][m]["h"] = 1 * (t.pvalue < alpha)
-                        else:
-                            t = mannwhitneyu(r1, r2)
-                            stats["events"][c][s][m]["p"] = t.pvalue
-                            if np.isnan(stats["events"][c][s][m]["p"]):
-                                stats["events"][c][s][m]["h"] = np.nan
-                            else:
-                                stats["events"][c][s][m]["h"] = 1 * (t.pvalue < alpha)
+                    stats["events"][c][s][m] = _compare_samples(r1, r2, is_paired, alpha)
 
         cat = ["hyperglycemic_events"]
         sub_cat = ['hyper', 'l1', 'l2']
@@ -856,85 +659,12 @@ class Agata:
                 for m in metric_list_name:
                     r1 = results["arm_1"]["events"][c][s][m]["values"]
                     r2 = results["arm_2"]["events"][c][s][m]["values"]
-                    # Correct for lilliefors behaviour
-                    if (r1[~np.isnan(r1)].size >= 4):
-                        ks, p1 = lilliefors(r1[~np.isnan(r1)])
-                    else:
-                        p1 = 0
-                    if (r2[~np.isnan(r2)].size >= 4):
-                        ks, p2 = lilliefors(r2[~np.isnan(r2)])
-                    else:
-                        p2 = 0
-
-                    stats["events"][c][s][m] = dict()
-                    if np.sum(~np.isnan(r1)) < 4 or np.sum(~np.isnan(r2)) < 4 or ((p1 > 0.05 or np.isnan(p1)) and (p2 > 0.05 or np.isnan(p2))):
-                        t = ttest_ind(r1, r2, nan_policy="omit")
-                        stats["events"][c][s][m]["p"] = t.pvalue
-                        if np.isnan(stats["events"][c][s][m]["p"]):
-                            stats["events"][c][s][m]["h"] = np.nan
-                        else:
-                            stats["events"][c][s][m]["h"] = 1 * (t.pvalue < alpha)
-                    else:
-                        if is_paired:
-                            idxs = np.where(np.logical_and(~np.isnan(r1), ~np.isnan(r2)))[0]
-                            if np.all(r1[idxs] - r2[idxs]) == 0:
-                                stats["events"][c][s][m]["h"] = np.nan
-                                stats["events"][c][s][m]["p"] = np.nan
-                            else:
-                                t = wilcoxon(r1, r2, nan_policy="omit")
-                                stats["events"][c][s][m]["p"] = t.pvalue
-                                if np.isnan(stats["events"][c][s][m]["p"]):
-                                    stats["events"][c][s][m]["h"] = np.nan
-                                else:
-                                    stats["events"][c][s][m]["h"] = 1 * (t.pvalue < alpha)
-                        else:
-                            t = mannwhitneyu(r1, r2)
-                            stats["events"][c][s][m]["p"] = t.pvalue
-                            if np.isnan(stats["events"][c][s][m]["p"]):
-                                stats["events"][c][s][m]["h"] = np.nan
-                            else:
-                                stats["events"][c][s][m]["h"] = 1 * (t.pvalue < alpha)
+                    stats["events"][c][s][m] = _compare_samples(r1, r2, is_paired, alpha)
 
         stats["events"]["extended_hypoglycemic_events"] = dict()
         for m in metric_list_name:
             r1 = results["arm_1"]["events"]["extended_hypoglycemic_events"][m]["values"]
             r2 = results["arm_2"]["events"]["extended_hypoglycemic_events"][m]["values"]
-            # Correct for lilliefors behaviour
-            if (r1[~np.isnan(r1)].size >= 4):
-                ks, p1 = lilliefors(r1[~np.isnan(r1)])
-            else:
-                p1 = 0
-            if (r2[~np.isnan(r2)].size >= 4):
-                ks, p2 = lilliefors(r2[~np.isnan(r2)])
-            else:
-                p2 = 0
-            stats["events"]["extended_hypoglycemic_events"][m] = dict()
-            if np.sum(~np.isnan(r1)) < 4 or np.sum(~np.isnan(r2)) < 4 or ((p1 > 0.05 or np.isnan(p1)) and (p2 > 0.05 or np.isnan(p2))):
-                t = ttest_ind(r1, r2, nan_policy="omit")
-                stats["events"]["extended_hypoglycemic_events"][m]["p"] = t.pvalue
-                if np.isnan(stats["events"]["extended_hypoglycemic_events"][m]["p"]):
-                    stats["events"]["extended_hypoglycemic_events"][m]["h"] = np.nan
-                else:
-                    stats["events"]["extended_hypoglycemic_events"][m]["h"] = 1 * (t.pvalue < alpha)
-            else:
-                if is_paired:
-                    idxs = np.where(np.logical_and(~np.isnan(r1), ~np.isnan(r2)))[0]
-                    if np.all(r1[idxs] - r2[idxs]) == 0:
-                        stats["events"]["extended_hypoglycemic_events"][m]["h"] = np.nan
-                        stats["events"]["extended_hypoglycemic_events"][m]["p"] = np.nan
-                    else:
-                        t = wilcoxon(r1, r2, nan_policy="omit")
-                        stats["events"]["extended_hypoglycemic_events"][m]["p"] = t.pvalue
-                        if np.isnan(stats["events"]["extended_hypoglycemic_events"][m]["p"]):
-                            stats["events"]["extended_hypoglycemic_events"][m]["h"] = np.nan
-                        else:
-                            stats["events"]["extended_hypoglycemic_events"][m]["h"] = 1 * (t.pvalue < alpha)
-                else:
-                    t = mannwhitneyu(r1, r2)
-                    stats["events"]["extended_hypoglycemic_events"][m]["p"] = t.pvalue
-                    if np.isnan(stats["events"]["extended_hypoglycemic_events"][m]["p"]):
-                        stats["events"]["extended_hypoglycemic_events"][m]["h"] = np.nan
-                    else:
-                        stats["events"]["extended_hypoglycemic_events"][m]["h"] = 1 * (t.pvalue < alpha)
+            stats["events"]["extended_hypoglycemic_events"][m] = _compare_samples(r1, r2, is_paired, alpha)
 
         return results, stats
