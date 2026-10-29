@@ -757,7 +757,40 @@ def _agp_ticks():
     return ticks, labels
 
 
-def _agp_percentiles(data: pd.DataFrame, bin_minutes: int = 15, smooth_bins: int = 3) -> pd.DataFrame:
+def agp_percentiles(glucose_profiles, bin_minutes: int = 15, smooth_bins: int = 3) -> pd.DataFrame:
+    """
+    Computes the Ambulatory Glucose Profile (AGP) percentile curves over the time of day.
+    Samples of all profiles are pooled in time-of-day bins, and each percentile is smoothed with a circular
+    moving average across midnight.
+
+    Parameters
+    ----------
+    glucose_profiles : pd.DataFrame or list of pd.DataFrame
+        One glucose profile or a list of glucose profiles. Each dataframe must contain
+        columns `t` and `glucose` and have a homogeneous time grid.
+    bin_minutes : int, optional, default: 15
+        Width of the time-of-day bins in minutes.
+    smooth_bins : int, optional, default: 3
+        Half-width of the moving average window in bins.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns `p05`, `p25`, `p50`, `p75` and `p95` in mg/dL, indexed by minute of day from 0 to 1440
+        (bin centers, plus both day edges).
+
+    References
+    ----------
+    Battelino et al., "Clinical targets for continuous glucose monitoring data
+    interpretation: recommendations from the international consensus on time in
+    range", Diabetes Care, 2019, vol. 42, pp. 1593-1603. DOI: 10.2337/dci19-0028.
+    """
+    if isinstance(glucose_profiles, pd.DataFrame):
+        glucose_profiles = [glucose_profiles]
+    data = pd.concat([_prepare_agp_dataframe(d) for d in glucose_profiles], ignore_index=True)
+    data = data.dropna(subset=['glucose'])
+    if data.empty:
+        raise ValueError('`glucose_profiles` must contain at least one non-NaN glucose value.')
 
     # Pool samples in time-of-day bins, then smooth circularly across midnight
     bins = (data['minute_of_day'] // bin_minutes) * bin_minutes
@@ -1005,7 +1038,7 @@ def export_agp_pdf(glucose_profiles, file_path: str = 'agp_report.pdf',
     if aggregated['glucose'].dropna().empty:
         raise ValueError('`glucose_profiles` must contain at least one non-NaN glucose value.')
 
-    agp = _agp_percentiles(aggregated.dropna(subset=['glucose']))
+    agp = agp_percentiles(glucose_profiles)
     summary = _build_agp_summary(aggregated[['t', 'glucose']])
 
     output_path = Path(file_path)

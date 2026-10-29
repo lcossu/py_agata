@@ -105,6 +105,7 @@ Every metric is also a plain function in the module of the same name, e.g. `from
 - `plot_clarke_error_grid`, `plot_dts_error_grid` (return `(fig, percentages)`)
 
 `export_agp_pdf` writes a one-page AGP report to PDF (IDC AGP v5 layout, type 1 diabetes targets).
+`agp_percentiles` returns the AGP percentile curves (5th to 95th) over the time of day, pooled across profiles.
 
 Every plot takes `width` and `height` in pixels. Defaults suit each plot (900×450 for time series, 600×600 for grids). Pass `None` to let the figure fill its container, e.g. in a web page.
 

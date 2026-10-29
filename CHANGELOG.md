@@ -18,6 +18,7 @@
 - `visualization` module: Plotly figures for glucose traces, events, CVGA, Poincaré, ROC histogram, LBGI/HBGI per hour, GRI, glucose pentagon, 3D glucose, Clarke and DTS error grids
   - One shared style, with `width` and `height` parameters on every plot
 - `visualization.export_agp_pdf`: one-page AGP report (IDC AGP v5 layout, type 1 diabetes targets)
+- `visualization.agp_percentiles`: AGP percentile curves over the time of day, pooled across profiles
 - Support for pandas 3
 
 ### Changed (breaking)
