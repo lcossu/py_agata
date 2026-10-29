@@ -65,3 +65,32 @@ def test_multiscale_entropy():
     data = pd.DataFrame(data=d)
     mse = multiscale_entropy(data, m=2, r=0.2, max_scale=5)
     assert (mse == 0.6931471805599453)
+
+
+def _sample_entropy_loop(time_series, m, r):
+    # Reference pairwise loop, kept to check the vectorised implementation
+    time_series = np.asarray(time_series, dtype=float)
+    N = len(time_series)
+    r *= np.nanstd(time_series)
+
+    def count(m):
+        c = 0
+        for i in range(N - m):
+            for j in range(i + 1, N - m + 1):
+                a, b = time_series[i:i + m], time_series[j:j + m]
+                if not (np.isnan(a).any() or np.isnan(b).any()) and np.max(np.abs(a - b)) <= r:
+                    c += 1
+        return c
+
+    B, A = count(m), count(m + 1)
+    if B == 0:
+        return np.nan
+    return -np.log(1.0 / (B + 1)) if A == 0 else -np.log(A / B)
+
+
+def test_sample_entropy_matches_pairwise_loop():
+    rng = np.random.default_rng(0)
+    series = np.cumsum(rng.normal(0, 5, 300)) + 140
+    series[[10, 11, 150, 299]] = np.nan
+    for m, r in [(2, 0.15), (3, 0.2), (1, 0.1)]:
+        assert sample_entropy(series, m=m, r=r) == pytest.approx(_sample_entropy_loop(series, m, r))

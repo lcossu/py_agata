@@ -32,6 +32,7 @@
 
 ### Fixed
 
+- `sample_entropy` and `multiscale_entropy` compare windows with numpy instead of a pairwise Python loop. On 13 days of 5-minute data, `sample_entropy` drops from 73 s to 0.2 s, with identical values.
 - `detrend_glucose`, `impute_glucose` and `retime_glucose` returned unmodified data under pandas 3 (chained assignment).
 - `compare_two_arms` now selects tests as MATLAB AGATA `compareTwoArms` does. P-values can change from 0.0.8.
   - Gaussian samples with `is_paired=True` use the paired t-test. 0.0.8 always ran the unpaired one.

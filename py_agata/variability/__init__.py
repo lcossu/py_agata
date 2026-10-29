@@ -1750,15 +1750,13 @@ def sample_entropy(time_series, m=2, r=0.15):
         return np.nan
     r *= np.nanstd(time_series)
     def _count_matches(m):
+        # Pairs i < j of the windows starting at 0..N-m, skipping windows that contain nan
+        windows = np.lib.stride_tricks.sliding_window_view(time_series, m)[:N - m + 1]
+        valid = ~np.isnan(windows).any(axis=1)
+        windows = windows[valid]
         count = 0
-        for i in range(N - m):
-            template = time_series[i:i + m]
-            for j in range(i + 1, N - m + 1):
-                window = time_series[j:j + m]
-                if np.any(np.isnan(template)) or np.any(np.isnan(window)):
-                    continue
-                if np.max(np.abs(template - window)) <= r:
-                    count += 1
+        for i in range(len(windows) - 1):
+            count += np.count_nonzero(np.max(np.abs(windows[i + 1:] - windows[i]), axis=1) <= r)
         return count
     B = _count_matches(m)
     A = _count_matches(m + 1)
