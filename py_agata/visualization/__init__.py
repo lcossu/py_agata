@@ -6,13 +6,13 @@ from matplotlib.patches import Rectangle
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import pandas as pd
-from plotly.graph_objs import Scatter, Scatter3d, Scatterpolar, Bar, Histogram, Figure
+from plotly.graph_objs import Scatter, Scatter3d, Scatterpolar, Bar, Figure
 from plotly.subplots import make_subplots
 
 from py_agata.error import clarke, dts_error_grid, _DTS_BORDERS
 from py_agata.glycemic_transformation import glucose_pentagon
 from py_agata.input_validator import check_dataframe, check_data_columns, check_homogeneous_timegrid
-from py_agata.risk import lbgi, hbgi, gri
+from py_agata.risk import lbgi, hbgi, gri, gri_components, dynamic_risk
 from py_agata.inspection import missing_glucose_percentage
 from py_agata.time_in_ranges import time_in_target, time_in_hypoglycemia, time_in_hyperglycemia, \
     time_in_l1_hypoglycemia, time_in_l2_hypoglycemia, time_in_l1_hyperglycemia, time_in_l2_hyperglycemia, \
@@ -29,6 +29,9 @@ HYPER_COLOR = 'goldenrod'
 ZONE_COLORS = ['#b8e186', '#e6f598', '#fee08b', '#fdae61', '#f46d43']
 
 GRID_COLOR = 'rgb(232,232,232)'
+
+# Pixels added below glucose plots for each `cho`, `bolus` or `basal` panel
+INPUT_PANEL_HEIGHT = 80
 
 
 def _style(fig, title, width, height, font_size=14, square=False):
@@ -72,39 +75,58 @@ def plot_glucose(data, above=180, below=70, width=900, height=450) -> Figure:
     width: int or None, optional, default: 900
         Figure width in pixels. None fills the container.
     height: int or None, optional, default: 450
-        Total figure height in pixels, shared by all panels. None fills the container.
+        Height in pixels without the input panels, which add `INPUT_PANEL_HEIGHT` each. None fills the container.
 
     Returns
     -------
     fig: plotly.graph_objs.Figure
     """
+    fig = _glucose_figure(data, above, below, width, height)
+    fig.update_layout(selectdirection='h', dragmode='select')
+    return fig
+
+
+def _glucose_figure(data, above, below, width, height, panels=()) -> Figure:
+    """
+    Builds the glucose panel with the target range, then one panel per entry of `panels`, then the `cho`, `bolus`
+    and `basal` panels for the columns present in `data`. Each panel entry is (traces, y title, height weight).
+    `height` covers the glucose and `panels` rows, and each input panel adds `INPUT_PANEL_HEIGHT` pixels.
+    """
     check_dataframe(data)
     check_data_columns(data)
 
-    ytitles = ['Glucose [mg/dL]']
-    traces = [Scatter(x=data['t'], y=data['glucose'], mode='lines', name='Glucose',
+    glucose = Scatter(x=data['t'], y=data['glucose'], mode='lines', name='Glucose',
                       line=dict(color=CGM_COLOR, width=1.5), showlegend=False,
-                      hovertemplate='%{x|%d %b %H:%M}<br>%{y:.0f} mg/dL<extra></extra>')]
+                      hovertemplate='%{x|%d %b %H:%M}<br>%{y:.0f} mg/dL<extra></extra>')
+    panels = [([glucose], 'Glucose [mg/dL]', 3), *panels]
+    inputs = []
 
     # Discrete inputs are drawn only where they occur
     for col, ytitle, symbol in [('cho', 'CHO [g]', 'star'), ('bolus', 'Bolus [U]', 'triangle-up')]:
         if col in data.columns:
-            ytitles.append(ytitle)
-            traces.append(Scatter(x=data['t'], y=data[col].where(data[col] > 0), mode='markers',
-                                  marker=dict(symbol=symbol, size=9, color='dimgray'), name=ytitle,
-                                  showlegend=False))
+            inputs.append(([Scatter(x=data['t'], y=data[col].where(data[col] > 0), mode='markers',
+                                    marker=dict(symbol=symbol, size=9, color='dimgray'), name=ytitle,
+                                    showlegend=False)], ytitle))
     if 'basal' in data.columns:
-        ytitles.append('Basal [U/min]')
-        traces.append(Scatter(x=data['t'], y=data['basal'], mode='lines', line=dict(color='dimgray', shape='hv'),
-                              name='Basal [U/min]', showlegend=False))
+        inputs.append(([Scatter(x=data['t'], y=data['basal'], mode='lines', line=dict(color='dimgray', shape='hv'),
+                                name='Basal [U/min]', showlegend=False)], 'Basal [U/min]'))
 
-    # The glucose panel is three times as tall as each input panel
-    weights = [3] + [1] * (len(traces) - 1)
-    fig = make_subplots(rows=len(traces), cols=1, shared_xaxes=True, vertical_spacing=0.04,
+    # Weights are pixels when the height is fixed, and input panels keep a third of the glucose panel otherwise
+    if height is None:
+        panels += [(traces, ytitle, 1) for traces, ytitle in inputs]
+    else:
+        scale = height / sum(weight for _, _, weight in panels)
+        panels = [(traces, ytitle, weight * scale) for traces, ytitle, weight in panels]
+        panels += [(traces, ytitle, INPUT_PANEL_HEIGHT) for traces, ytitle in inputs]
+        height += len(inputs) * INPUT_PANEL_HEIGHT
+
+    weights = [weight for _, _, weight in panels]
+    fig = make_subplots(rows=len(panels), cols=1, shared_xaxes=True, vertical_spacing=0.04,
                         row_heights=[w / sum(weights) for w in weights])
-    for i, (trace, ytitle) in enumerate(zip(traces, ytitles)):
-        fig.add_trace(trace, row=i + 1, col=1)
-        fig.update_yaxes(title_text=ytitle, row=i + 1, col=1)
+    for row, (traces, ytitle, _) in enumerate(panels, start=1):
+        for trace in traces:
+            fig.add_trace(trace, row=row, col=1)
+        fig.update_yaxes(title_text=ytitle, row=row, col=1)
 
     fig.add_hrect(y0=below, y1=above, fillcolor='rgba(184,225,134,0.25)', line_width=0, layer='below', row=1, col=1)
     fig.add_hline(y=below, line=dict(color=HYPO_COLOR, width=1.5, dash='dash'), row=1, col=1)
@@ -112,7 +134,6 @@ def plot_glucose(data, above=180, below=70, width=900, height=450) -> Figure:
     fig.update_yaxes(range=[40, 400], row=1, col=1)
 
     _style(fig, None, width, height)
-    fig.update_layout(selectdirection='h', dragmode='select')
     return fig
 
 
@@ -399,9 +420,37 @@ def plot_dts_error_grid(data, reference_col='reference_glucose', predicted_col='
     return fig, percentages
 
 
+def roc_histogram(data, bin_width=0.25) -> pd.DataFrame:
+    """
+    Computes the histogram of the glucose rate of change between consecutive samples.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Pandas dataframe with columns `t` and `glucose` (in mg/dl).
+    bin_width : float, optional, default: 0.25
+        Bin width in mg/dL/min. Bins are aligned to multiples of `bin_width`.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns `bin_start` and `bin_end` (mg/dL/min) and `count` (samples), one row per non-empty bin.
+    """
+    check_dataframe(data)
+    check_data_columns(data)
+
+    ts = (pd.to_datetime(data.t.values[1]) - pd.to_datetime(data.t.values[0])).total_seconds() / 60
+    roc = np.diff(data.glucose.values) / ts
+    roc = roc[~np.isnan(roc)]
+
+    counts = pd.Series(np.floor(roc / bin_width) * bin_width).value_counts().sort_index()
+    return pd.DataFrame({'bin_start': counts.index, 'bin_end': counts.index + bin_width, 'count': counts.values})
+
+
 def plot_roc_histogram(data, width=700, height=450):
     """
     Plots the histogram of the glucose rate of change between consecutive samples.
+    `roc_histogram` returns the plotted counts.
 
     Parameters
     ----------
@@ -416,15 +465,11 @@ def plot_roc_histogram(data, width=700, height=450):
     -------
     fig: plotly.graph_objs.Figure
     """
-    check_dataframe(data)
-    check_data_columns(data)
+    hist = roc_histogram(data)
 
-    ts = (pd.to_datetime(data.t.values[1]) - pd.to_datetime(data.t.values[0])).total_seconds() / 60
-    roc = np.diff(data.glucose.values) / ts
-    roc = roc[~np.isnan(roc)]
-
-    fig = Figure(Histogram(x=roc, xbins=dict(size=0.25), marker=dict(color=CGM_COLOR, line=dict(color='white', width=0.5)),
-                           hovertemplate='%{x} mg/dL/min<br>%{y} samples<extra></extra>', showlegend=False))
+    fig = Figure(Bar(x=hist['bin_start'] + 0.125, y=hist['count'], width=0.25,
+                     marker=dict(color=CGM_COLOR, line=dict(color='white', width=0.5)), customdata=hist[['bin_start', 'bin_end']],
+                     hovertemplate='%{customdata[0]:.2f} to %{customdata[1]:.2f} mg/dL/min<br>%{y} samples<extra></extra>', showlegend=False))
     fig.add_vline(x=0, line=dict(color='black', width=1, dash='dot'))
 
     _style(fig, 'Glucose rate of change', width, height)
@@ -555,10 +600,80 @@ def plot_poincare(data, font_size=14, width=600, height=600):
     return fig
 
 
+def plot_dynamic_risk(data, above=180, below=70, width=900, height=600) -> Figure:
+    """
+    Plots the glucose trace above its dynamic risk. Negative risk is hypoglycemic, positive is hyperglycemic.
+    Columns `cho`, `bolus` and `basal`, if present, are drawn in panels below. `risk.dynamic_risk` returns the
+    plotted risk.
+
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Pandas dataframe with columns `t` and `glucose` (in mg/dl), and optionally `cho`, `bolus` and `basal`.
+    above: float, optional, default: 180
+        Upper threshold of the target range (in mg/dl).
+    below: float, optional, default: 70
+        Lower threshold of the target range (in mg/dl).
+    width: int or None, optional, default: 900
+        Figure width in pixels. None fills the container.
+    height: int or None, optional, default: 600
+        Height in pixels without the input panels, which add `INPUT_PANEL_HEIGHT` each. None fills the container.
+
+    Returns
+    -------
+    fig: plotly.graph_objs.Figure
+    """
+    risk = dynamic_risk(data)
+    traces = [Scatter(x=data['t'], y=part, mode='lines', name=name, fill='tozeroy', line=dict(color=color, width=1),
+                      hovertemplate='%{y:.1f}<extra></extra>')
+              for name, color, part in (('Hypo risk', HYPO_COLOR, np.minimum(risk, 0)),
+                                        ('Hyper risk', HYPER_COLOR, np.maximum(risk, 0)))]
+
+    fig = _glucose_figure(data, above, below, width, height, panels=[(traces, 'Dynamic risk', 2)])
+    fig.update_layout(hovermode='x unified')
+    return fig
+
+
+def lbgi_hbgi_hourly(data, by_hour_of_day=False) -> pd.DataFrame:
+    """
+    Computes LBGI and HBGI in 1-hour blocks.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        DataFrame with columns 't' (datetime) and 'glucose' (mg/dL)
+    by_hour_of_day : bool, optional, default: False
+        If True, averages the blocks of each clock hour across days.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns `lbgi` and `hbgi`. Indexed by block start time, or by hour of day from 0 to 23 when
+        `by_hour_of_day` is True. Blocks without glucose values are NaN.
+    """
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
+    hourly = data.set_index(pd.to_datetime(data['t']))['glucose'].resample('1h')
+
+    rows = {}
+    for t, block in hourly:
+        block_df = pd.DataFrame({'glucose': block.dropna(), 't': t})
+        rows[t] = (np.nan, np.nan) if block_df.empty else (lbgi(block_df), hbgi(block_df))
+    out = pd.DataFrame.from_dict(rows, orient='index', columns=['lbgi', 'hbgi'])
+    out.index.name = 't'
+
+    if by_hour_of_day:
+        out = out.groupby(out.index.hour).mean()
+        out.index.name = 'hour'
+    return out
+
+
 def plot_lbgi_hbgi_hourly(data, font_size=14, width=900, height=400):
     """
     Computes LBGI and HBGI in 1-hour blocks and plots them as a single bar chart.
-    LBGI is shown as negative values, HBGI as positive values.
+    LBGI is shown as negative values, HBGI as positive values. `lbgi_hbgi_hourly` returns the plotted values.
 
     Parameters
     ----------
@@ -575,18 +690,8 @@ def plot_lbgi_hbgi_hourly(data, font_size=14, width=900, height=400):
     -------
     fig : plotly.graph_objs.Figure
     """
-    check_dataframe(data)
-    check_data_columns(data)
-    check_homogeneous_timegrid(data)
-
-    hourly = data.set_index(pd.to_datetime(data['t']))['glucose'].resample('1h')
-
-    hours, lbgi_vals, hbgi_vals = [], [], []
-    for t, block in hourly:
-        block_df = pd.DataFrame({'glucose': block.dropna(), 't': t})
-        hours.append(t)
-        lbgi_vals.append(np.nan if block_df.empty else -lbgi(block_df))
-        hbgi_vals.append(np.nan if block_df.empty else hbgi(block_df))
+    values = lbgi_hbgi_hourly(data)
+    hours, lbgi_vals, hbgi_vals = list(values.index), list(-values['lbgi']), list(values['hbgi'])
 
     # Symmetric y range so zero sits in the middle
     top = np.nanmax(np.abs(np.r_[lbgi_vals, hbgi_vals, 1])) * 1.1
@@ -644,11 +749,10 @@ def plot_gri(datasets, labels=None, font_size=14, width=750, height=600):
         check_homogeneous_timegrid(data)
         if data.shape[0] < 2:
             raise ValueError("Data must span more than one timepoint.")
-        vlow, low = time_in_l2_hypoglycemia(data), time_in_l1_hypoglycemia(data)
-        vhigh, high = time_in_l2_hyperglycemia(data), time_in_l1_hyperglycemia(data)
-        x_hypo.append(vlow + 0.8 * low)
-        y_hyper.append(vhigh + 0.5 * high)
-        gris.append(min(100, 3.0 * vlow + 2.4 * low + 1.6 * vhigh + 0.8 * high))
+        hypo, hyper = gri_components(data)
+        x_hypo.append(hypo)
+        y_hyper.append(hyper)
+        gris.append(gri(data))
 
     fig = Figure()
 
@@ -692,7 +796,7 @@ def plot_glucose_events(data, events: dict, above=180, below=70, width=900, heig
     width: int or None, optional, default: 900
         Figure width in pixels. None fills the container.
     height: int or None, optional, default: 450
-        Total figure height in pixels. None fills the container.
+        Height in pixels without the input panels, which add `INPUT_PANEL_HEIGHT` each. None fills the container.
 
     Returns
     -------

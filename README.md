@@ -100,12 +100,14 @@ Every metric is also a plain function in the module of the same name, e.g. `from
 `py_agata.visualization` returns Plotly figures:
 
 - `plot_glucose`, `plot_glucose_events`, `plot_glucose_3d`
-- `plot_poincare`, `plot_roc_histogram`, `plot_lbgi_hbgi_hourly`, `plot_glucose_pentagon`
+- `plot_poincare`, `plot_roc_histogram`, `plot_lbgi_hbgi_hourly`, `plot_dynamic_risk`, `plot_glucose_pentagon`
 - `plot_cvga`, `plot_gri` (several profiles)
 - `plot_clarke_error_grid`, `plot_dts_error_grid` (return `(fig, percentages)`)
 
 `export_agp_pdf` writes a one-page AGP report to PDF (IDC AGP v5 layout, type 1 diabetes targets).
 `agp_percentiles` returns the AGP percentile curves (5th to 95th) over the time of day, pooled across profiles.
+
+`lbgi_hbgi_hourly` returns the LBGI and HBGI values that `plot_lbgi_hbgi_hourly` draws, per 1-hour block or averaged by hour of day. `roc_histogram` returns the counts behind `plot_roc_histogram`, and `risk.gri_components` returns the GRI grid coordinates behind `plot_gri`.
 
 Every plot takes `width` and `height` in pixels. Defaults suit each plot (900×450 for time series, 600×600 for grids). Pass `None` to let the figure fill its container, e.g. in a web page.
 

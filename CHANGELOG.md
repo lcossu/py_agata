@@ -15,10 +15,13 @@
 - `events` module: `after_meal_auc`, `meal_response_metrics`, `tdi`
 - `inspection`: `number_days_at_least_data`
 - `processing`: `merge_additional_data`, `select_time_window`
-- `visualization` module: Plotly figures for glucose traces, events, CVGA, Poincaré, ROC histogram, LBGI/HBGI per hour, GRI, glucose pentagon, 3D glucose, Clarke and DTS error grids
+- `visualization` module: Plotly figures for glucose traces, events, CVGA, Poincaré, ROC histogram, LBGI/HBGI per hour, GRI, glucose pentagon, 3D glucose, Clarke and DTS error grids, dynamic risk
   - One shared style, with `width` and `height` parameters on every plot
 - `visualization.export_agp_pdf`: one-page AGP report (IDC AGP v5 layout, type 1 diabetes targets)
 - `visualization.agp_percentiles`: AGP percentile curves over the time of day, pooled across profiles
+- `visualization.lbgi_hbgi_hourly`: LBGI and HBGI per 1-hour block, or averaged by hour of day
+- `visualization.roc_histogram`: rate-of-change histogram counts
+- `risk.gri_components`: hypoglycemia and hyperglycemia components of GRI
 - Support for pandas 3
 
 ### Changed (breaking)
@@ -33,6 +36,7 @@
 
 ### Fixed
 
+- `risk.dynamic_risk` no longer prints a debug value on every call
 - `sample_entropy` and `multiscale_entropy` compare windows with numpy instead of a pairwise Python loop. On 13 days of 5-minute data, `sample_entropy` drops from 73 s to 0.2 s, with identical values.
 - `detrend_glucose`, `impute_glucose` and `retime_glucose` returned unmodified data under pandas 3 (chained assignment).
 - `compare_two_arms` now selects tests as MATLAB AGATA `compareTwoArms` does. P-values can change from 0.0.8.

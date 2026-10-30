@@ -295,15 +295,47 @@ def gri(data):
     check_homogeneous_timegrid(data)
 
     # Compute metric
+    hypo, hyper = gri_components(data)
+    gri = 3.0 * hypo + 1.6 * hyper
+
+    # Limit gri between 0 - 100 and return
+    return np.min([gri, 100])
+
+
+def gri_components(data):
+    """
+    Computes the hypoglycemia and hyperglycemia components of the glycemia risk index (GRI).
+    GRI = 3.0 * hypo + 1.6 * hyper, capped at 100. The components are the coordinates of the GRI grid.
+
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Pandas dataframe with columns `t` and `glucose` containing the glucose data
+        to analyze (in mg/dl).
+
+    Returns
+    -------
+    hypo: float
+        VLow + 0.8 * Low, in % of time.
+    hyper: float
+        VHigh + 0.5 * High, in % of time.
+
+    References
+    ----------
+    Klonoff et al., "A Glycemia Risk Index (GRI) of hypoglycemia and
+    hyperglycemia for continuous glucose monitoring validated by clinician
+    ratings", Journal of Diabetes Science and Technology, 2022, pp. 1-17.
+    DOI: 10.1177/19322968221085273.
+    """
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
     v_low = time_in_l2_hypoglycemia(data)  # VLow( < 54 mg / dL; < 3.0 mmol / L)
     low = time_in_l1_hypoglycemia(data)  # Low(54–70 mg / dL; 3.0–3.9 mmol / L)
     v_high = time_in_l2_hyperglycemia(data)  # VHigh( > 250 mg / dL; > 13.9 mmol / L)
     high = time_in_l1_hyperglycemia(data)  # High( > 180–250 mg / dL; > 10.0–13.9 mmol / L)
-
-    gri = (3.0 * v_low) + (2.4 * low) + (1.6 * v_high) + (0.8 * high)
-
-    # Limit gri between 0 - 100 and return
-    return np.min([gri, 100])
+    return v_low + 0.8 * low, v_high + 0.5 * high
 
 
 def dynamic_risk(data, amplification_function='tanh', maximum_amplification=2.5, amplification_rapidity=2.,
@@ -366,7 +398,6 @@ def dynamic_risk(data, amplification_function='tanh', maximum_amplification=2.5,
     gamma = 1.509
     dr_delta = (maximum_amplification - maximum_damping) / 2
     dr_beta = dr_delta + maximum_damping
-    print((1 - dr_beta) / dr_delta)
     dr_gamma = np.arctanh(complex((1 - dr_beta) / dr_delta, 0))
     rl = np.zeros(shape=(data.glucose.values.size,))
     rh = np.zeros(shape=(data.glucose.values.size,))

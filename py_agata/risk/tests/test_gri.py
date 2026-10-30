@@ -68,3 +68,18 @@ def test_gri():
 
     # Tests
     assert np.isnan(gri(data))
+
+
+def test_gri_components_rebuild_gri():
+    import numpy as np
+    import pandas as pd
+    from py_agata.risk import gri, gri_components
+
+    t = pd.date_range('2024-01-01', periods=100, freq='5min')
+    glucose = np.r_[[50] * 5, [65] * 10, [120] * 60, [200] * 15, [300] * 10]
+    data = pd.DataFrame({'t': t, 'glucose': glucose})
+
+    hypo, hyper = gri_components(data)
+    assert np.isclose(hypo, 5 + 0.8 * 10)
+    assert np.isclose(hyper, 10 + 0.5 * 15)
+    assert np.isclose(gri(data), 3.0 * hypo + 1.6 * hyper)
