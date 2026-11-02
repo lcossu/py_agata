@@ -12,7 +12,7 @@
 - `glycemic_transformation`: `glucose_pentagon`
 - `risk`: `glycemic_risk_parameter`
 - `error`: `dts_error_grid` (DTS Error Grid, Klonoff 2024)
-- `events` module: `after_meal_auc`, `meal_response_metrics`, `tdi`
+- `events` module: `after_meal_auc`, `meal_response_metrics` (peak searched in the 120 min after the meal), `tdi`
 - `inspection`: `number_days_at_least_data`
 - `processing`: `merge_additional_data`, `select_time_window`
 - `visualization` module: Plotly figures for glucose traces, events, CVGA, Poincaré, ROC histogram, LBGI/HBGI per hour, GRI, glucose pentagon, 3D glucose, Clarke and DTS error grids, dynamic risk
@@ -22,6 +22,7 @@
 - `visualization.lbgi_hbgi_hourly`: LBGI and HBGI per 1-hour block, or averaged by hour of day
 - `visualization.roc_histogram`: rate-of-change histogram counts
 - `risk.gri_components`: hypoglycemia and hyperglycemia components of GRI
+- `visualization.plot_meal_response`: glucose around one meal with the baseline and peak of `meal_response_metrics`
 - Support for pandas 3
 
 ### Changed (breaking)

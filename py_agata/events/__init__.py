@@ -37,7 +37,7 @@ def after_meal_auc(data: pd.DataFrame, t_span: int = 120) -> list[tuple[datetime
     return list(zip(events.tolist(), aucs))
 
 
-def meal_response_metrics(data: pd.DataFrame, pre_meal_window: int = 15, post_meal_window: int = 60) -> list[dict]:
+def meal_response_metrics(data: pd.DataFrame, pre_meal_window: int = 15, post_meal_window: int = 120) -> list[dict]:
     check_dataframe(data)
     check_data_columns(data)
     check_homogeneous_timegrid(data)

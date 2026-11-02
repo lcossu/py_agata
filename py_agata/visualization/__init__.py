@@ -13,6 +13,7 @@ from py_agata.error import clarke, dts_error_grid, _DTS_BORDERS
 from py_agata.glycemic_transformation import glucose_pentagon
 from py_agata.input_validator import check_dataframe, check_data_columns, check_homogeneous_timegrid
 from py_agata.risk import lbgi, hbgi, gri, gri_components, dynamic_risk
+from py_agata.events import meal_response_metrics
 from py_agata.inspection import missing_glucose_percentage
 from py_agata.time_in_ranges import time_in_target, time_in_hypoglycemia, time_in_hyperglycemia, \
     time_in_l1_hypoglycemia, time_in_l2_hypoglycemia, time_in_l1_hyperglycemia, time_in_l2_hyperglycemia, \
@@ -134,6 +135,10 @@ def _glucose_figure(data, above, below, width, height, panels=()) -> Figure:
     fig.update_yaxes(range=[40, 400], row=1, col=1)
 
     _style(fig, None, width, height)
+
+    # Input panels are short, so their titles are smaller and their axes start at zero
+    for row in range(len(panels) - len(inputs) + 1, len(panels) + 1):
+        fig.update_yaxes(title_font_size=11, rangemode='tozero', row=row, col=1)
     return fig
 
 
@@ -631,6 +636,64 @@ def plot_dynamic_risk(data, above=180, below=70, width=900, height=600) -> Figur
 
     fig = _glucose_figure(data, above, below, width, height, panels=[(traces, 'Dynamic risk', 2)])
     fig.update_layout(hovermode='x unified')
+    return fig
+
+
+def plot_meal_response(data, meal_time, before=30, after=180, above=180, below=70, width=900,
+                       height=350) -> Figure:
+    """
+    Plots the glucose around one meal, with the baseline and peak that `events.meal_response_metrics` reports for
+    it. Columns `cho`, `bolus` and `basal`, if present, are drawn in panels below.
+
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Pandas dataframe with columns `t`, `glucose` (in mg/dl) and `cho`, and optionally `bolus` and `basal`.
+    meal_time: datetime-like
+        Time of the meal, as in `event_time` of `events.meal_response_metrics`.
+    before: float, optional, default: 30
+        Minutes shown before the meal.
+    after: float, optional, default: 180
+        Minutes shown after the meal.
+    above: float, optional, default: 180
+        Upper threshold of the target range (in mg/dl).
+    below: float, optional, default: 70
+        Lower threshold of the target range (in mg/dl).
+    width: int or None, optional, default: 900
+        Figure width in pixels. None fills the container.
+    height: int or None, optional, default: 350
+        Height in pixels without the input panels, which add `INPUT_PANEL_HEIGHT` each. None fills the container.
+
+    Returns
+    -------
+    fig: plotly.graph_objs.Figure
+    """
+    meal_time = pd.Timestamp(meal_time)
+    meal = next((m for m in meal_response_metrics(data) if m['event_time'] == meal_time), None)
+    if meal is None:
+        raise ValueError(f'No meal with a glucose response at {meal_time}.')
+
+    t = pd.to_datetime(data['t'])
+    window = data[(t >= meal_time - pd.Timedelta(minutes=before)) & (t <= meal_time + pd.Timedelta(minutes=after))]
+
+    # Baseline is the mean of the 15 min before the meal, as in meal_response_metrics
+    peak_time = meal_time + pd.Timedelta(minutes=meal['time_to_peak'])
+    peak = window.loc[pd.to_datetime(window['t']) == peak_time, 'glucose'].iloc[0]
+    baseline = peak - meal['glucose_rise_to_peak']
+
+    fig = _glucose_figure(window, above, below, width, height)
+
+    # Fit the glucose axis to the window, keeping both thresholds in view
+    fig.update_yaxes(range=[min(window['glucose'].min(), below) - 10, max(window['glucose'].max(), above) + 10],
+                     row=1, col=1)
+    fig.add_trace(Scatter(x=[meal_time - pd.Timedelta(minutes=15), meal_time], y=[baseline, baseline], mode='lines',
+                          name='Baseline', line=dict(color=REFERENCE_COLOR, width=2, dash='dash'),
+                          hovertemplate='Baseline %{y:.0f} mg/dL<extra></extra>'), row=1, col=1)
+    fig.add_trace(Scatter(x=[peak_time], y=[peak], mode='markers', name='Peak',
+                          marker=dict(color=CGM_COLOR, size=11, line=dict(color='white', width=1.5)),
+                          hovertemplate='Peak %{y:.0f} mg/dL<br>%{x|%H:%M}<extra></extra>'), row=1, col=1)
+    fig.add_vline(x=meal_time, line=dict(color='dimgray', width=1, dash='dot'), row='all', col=1)
+    fig.update_layout(legend=dict(orientation='h', x=1, xanchor='right', y=1.02, yanchor='bottom'))
     return fig
 
 

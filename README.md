@@ -100,7 +100,7 @@ Every metric is also a plain function in the module of the same name, e.g. `from
 `py_agata.visualization` returns Plotly figures:
 
 - `plot_glucose`, `plot_glucose_events`, `plot_glucose_3d`
-- `plot_poincare`, `plot_roc_histogram`, `plot_lbgi_hbgi_hourly`, `plot_dynamic_risk`, `plot_glucose_pentagon`
+- `plot_poincare`, `plot_roc_histogram`, `plot_lbgi_hbgi_hourly`, `plot_dynamic_risk`, `plot_meal_response`, `plot_glucose_pentagon`
 - `plot_cvga`, `plot_gri` (several profiles)
 - `plot_clarke_error_grid`, `plot_dts_error_grid` (return `(fig, percentages)`)
 

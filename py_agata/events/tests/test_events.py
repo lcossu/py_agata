@@ -29,6 +29,13 @@ def test_meal_response_metrics():
     assert m['percent_baseline_recovery_one_hour_after_peak'] == 75.
 
 
+def test_meal_response_metrics_finds_late_peak():
+    data = _day()
+    data.loc[144 + 6, 'glucose'] = 100.
+    data.loc[144 + 21, 'glucose'] = 200.
+    assert meal_response_metrics(data)[0]['time_to_peak'] == 105.
+
+
 def test_after_meal_auc():
     data = _day()
     data['glucose'] = 100.
