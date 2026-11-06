@@ -52,3 +52,20 @@ def test_impute_glucose():
     assert (results.glucose[2] == 120)
     assert (results.glucose[21] == 120)
     assert np.all(np.isnan(data.glucose.values[9:20]))
+
+
+def _trace(glucose):
+    t = pd.date_range('2020-01-01', periods=len(glucose), freq='5min')
+    return pd.DataFrame({'t': t, 'glucose': glucose})
+
+
+def test_impute_glucose_without_gaps():
+    data = _trace([100.0, 110.0, 120.0, 130.0])
+    assert impute_glucose(data, 30).glucose.tolist() == data.glucose.tolist()
+
+
+def test_impute_glucose_keeps_edge_gaps():
+    data = _trace([np.nan, 100.0, np.nan, 120.0, np.nan])
+    result = impute_glucose(data, 30).glucose.to_numpy()
+    assert np.isnan(result[0]) and np.isnan(result[4])
+    assert result[2] == 110.0

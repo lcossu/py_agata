@@ -117,7 +117,10 @@ def impute_glucose(data, max_gap):
     data_imputed = copy(data)
     idxs = np.arange(data_imputed.shape[0])
     f = interp1d(idxs[~np.isnan(data.glucose.values)], data.glucose.values[~np.isnan(data.glucose.values)],
-                 kind='linear')
+                 kind='linear', bounds_error=False)
+
+    # Gaps at the edges of the trace have no neighbor on one side, so they stay NaN.
+    short_nan = short_nan.astype(int)
     glucose = data_imputed.glucose.to_numpy(dtype=float, copy=True)
     glucose[short_nan] = f(short_nan)
     data_imputed['glucose'] = glucose
