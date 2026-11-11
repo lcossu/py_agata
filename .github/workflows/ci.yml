@@ -2,13 +2,19 @@ name: Codecov check
 on: [push, pull_request]
 jobs:
   run:
-    runs-on: ubuntu-latest
+    # ubuntu-latest (26.04) has no Python 3.9 build
+    runs-on: ubuntu-24.04
 
-    # Python 3.9 resolves to pandas 2, Python 3.13 to pandas 3
+    # 3.9 resolves to pandas 2, 3.13 to pandas 3.
+    # The pinned job tests the lower bounds in requirements.txt.
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.13']
+        include:
+          - python-version: '3.9'
+          - python-version: '3.9'
+            pins: numpy==1.23.5 pandas==2.2.2 scipy==1.11.0 statsmodels==0.14.5 plotly==6.0.0 matplotlib==3.9.0 openpyxl==3.1.0
+          - python-version: '3.13'
 
     steps:
       - name: Checkout
@@ -18,7 +24,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev]" ${{ matrix.pins }}
       - name: Run tests and collect coverage
         run: pytest --cov .
       - name: Upload coverage to Codecov

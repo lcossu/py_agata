@@ -30,9 +30,10 @@
 - `cvga` takes one profile or a list of profiles and returns `(profile_assessment, profile_coordinates, best_control_index, best_controlled_coordinates)`. `Agata` still reports the scalar per profile.
 - `find_extended_hypoglycemic_events` default threshold moves from 54 to 70 mg/dL, following the Battelino 2023 consensus (>120 min below 70 mg/dL).
 - Dependencies use lower bounds instead of exact pins:
-  - numpy >= 2.0
+  - numpy >= 1.23.5
   - pandas >= 2.2.2
-  - scipy >= 1.13
+  - scipy >= 1.11
+  - statsmodels >= 0.14.5 on Python < 3.11, >= 0.15.0 on Python >= 3.11 (older releases fail to import with numpy 2.1+, scipy 1.16+ or pandas 3)
 - `pytest` and `pytest-cov` move to the `dev` extra.
 
 ### Fixed
