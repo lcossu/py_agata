@@ -236,7 +236,7 @@ def find_hypoglycemic_events(data, th=70.):
     hypoglycemic_events['duration'] = np.empty(shape=0, dtype=float)
     hypoglycemic_events['mean_duration'] = np.nan
     hypoglycemic_events['events_per_week'] = np.nan
-    if data.glucose.values.size == 0:
+    if data.glucose.values.size < 2:
         return hypoglycemic_events
 
     k = 0 #hypoglycemic_event vector current index
@@ -371,7 +371,7 @@ def find_hyperglycemic_events(data, th=180.):
     hyperglycemic_events['duration'] = np.empty(shape=0, dtype=float)
     hyperglycemic_events['mean_duration'] = np.nan
     hyperglycemic_events['events_per_week'] = np.nan
-    if data.glucose.values.size == 0:
+    if data.glucose.values.size < 2:
         return hyperglycemic_events
 
     k = 0 #hypoglycemic_event vector current index
@@ -506,7 +506,7 @@ def find_extended_hypoglycemic_events(data, th=70.):
     extended_hypoglycemic_events['duration'] = np.empty(shape=0, dtype=float)
     extended_hypoglycemic_events['mean_duration'] = np.nan
     extended_hypoglycemic_events['events_per_week'] = np.nan
-    if data.glucose.values.size == 0:
+    if data.glucose.values.size < 2:
         return extended_hypoglycemic_events
 
     k = 0 #hypoglycemic_event vector current index
@@ -691,7 +691,7 @@ def find_hypoglycemic_events_by_level(data, glycemic_target = 'diabetes'):
     hypoglycemic_events['l1']['duration'] = copy(all_hypo_events['duration'][flag_l1_events])
     hypoglycemic_events['l1']['mean_duration'] = np.mean(hypoglycemic_events['l1']['duration'])
     n_days = number_days_of_observation(data)
-    hypoglycemic_events['l1']['events_per_week'] = hypoglycemic_events['l1']['time_start'].size / n_days * 7
+    hypoglycemic_events['l1']['events_per_week'] = hypoglycemic_events['l1']['time_start'].size / n_days * 7 if n_days > 0 else np.nan
     hypoglycemic_events['l2'] = copy(l2_hypo_events)
 
     return hypoglycemic_events
@@ -805,7 +805,7 @@ def find_hyperglycemic_events_by_level(data, glycemic_target='diabetes'):
     hyperglycemic_events['l1']['duration'] = copy(all_hyper_events['duration'][flag_l1_events])
     hyperglycemic_events['l1']['mean_duration'] = np.mean(hyperglycemic_events['l1']['duration'])
     n_days = number_days_of_observation(data)
-    hyperglycemic_events['l1']['events_per_week'] = hyperglycemic_events['l1']['time_start'].size / n_days * 7
+    hyperglycemic_events['l1']['events_per_week'] = hyperglycemic_events['l1']['time_start'].size / n_days * 7 if n_days > 0 else np.nan
     hyperglycemic_events['l2'] = copy(l2_hyper_events)
 
     return hyperglycemic_events

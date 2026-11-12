@@ -168,7 +168,10 @@ def plot_glucose_pentagon(data, a1c=None, width=600, height=550) -> Figure:
     Integrating Different Parameters from Glucose Profiles." (2009). Diabetes Technology & Therapeutics, 11(6),
     399–409. doi:10.1089/dia.2008.0119
     """
-    values = np.asarray(glucose_pentagon(data, a1c), dtype=float)
+    pentagon = glucose_pentagon(data, a1c)
+    if np.isscalar(pentagon):
+        raise ValueError('The glucose pentagon needs at least two samples with glucose values.')
+    values = np.asarray(pentagon, dtype=float)
 
     # Axis name, unit, value range and healthy reference
     names = ['Mean', 'SD', 'Time >160', 'AUC >160', 'HbA1c']
@@ -445,6 +448,10 @@ def roc_histogram(data, bin_width=0.25) -> pd.DataFrame:
     check_dataframe(data)
     check_data_columns(data)
     check_homogeneous_timegrid(data)
+
+    # The sampling time needs at least two samples
+    if data.t.values.size < 2:
+        return pd.DataFrame({'bin_start': [], 'bin_end': [], 'count': []})
 
     ts = (pd.to_datetime(data.t.values[1]) - pd.to_datetime(data.t.values[0])).total_seconds() / 60
     roc = np.diff(data.glucose.values) / ts

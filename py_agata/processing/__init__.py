@@ -105,6 +105,10 @@ def impute_glucose(data, max_gap):
     check_homogeneous_timegrid(data)
     check_int_parameter(max_gap)
 
+    # The sampling time needs at least two samples
+    if data.t.values.size < 2:
+        return data.copy()
+
     # Get the sample time
     t0 = pd.to_datetime(data.t.values[0]).to_pydatetime()
     t1 = pd.to_datetime(data.t.values[1]).to_pydatetime()

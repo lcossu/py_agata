@@ -324,6 +324,10 @@ def auc_glucose_over_basal(data, basal):
     values = values - basal
 
     # Get ts
+    # The sampling time needs at least two samples
+    if data.t.values.size < 2:
+        return np.nan
+
     t0 = pd.to_datetime(data.t.values[0]).to_pydatetime()
     t1 = pd.to_datetime(data.t.values[1]).to_pydatetime()
     ts = (t1 - t0).total_seconds() / 60
@@ -350,6 +354,10 @@ def positive_auc_glucose(data, basal):
     values = np.array([x if x > 0 else 0 for x in values])
 
     # Get ts
+    # The sampling time needs at least two samples
+    if data.t.values.size < 2:
+        return np.nan
+
     t0 = pd.to_datetime(data.t.values[0]).to_pydatetime()
     t1 = pd.to_datetime(data.t.values[1]).to_pydatetime()
     ts = (t1 - t0).total_seconds() / 60

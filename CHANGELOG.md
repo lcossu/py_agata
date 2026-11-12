@@ -42,6 +42,7 @@
 
 ### Fixed
 
+- Profiles with a single sample no longer crash `Agata`. Metrics that need the sampling time return nan, event finders return no events, `impute_glucose` returns the data unchanged, and `plot_glucose_pentagon` raises `ValueError`
 - `li` returns nan with a warning when 60 min is not a multiple of the sampling time, so `Agata` no longer fails on such grids
 - `roc_histogram`, `plot_roc_histogram` and `plot_poincare` check for a homogeneous time grid, which their pairing of consecutive samples assumes
 - `risk.dynamic_risk` no longer prints a debug value on every call

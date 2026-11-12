@@ -402,6 +402,10 @@ def dynamic_risk(data, amplification_function='tanh', maximum_amplification=2.5,
     rl = np.zeros(shape=(data.glucose.values.size,))
     rh = np.zeros(shape=(data.glucose.values.size,))
 
+    # The sampling time needs at least two samples
+    if data.t.values.size < 2:
+        return np.nan
+
     # Compute rate-of-change
     ts = (pd.to_datetime(data.t.values[1]).to_pydatetime() - pd.to_datetime(
         data.t.values[0]).to_pydatetime()).total_seconds() / 60

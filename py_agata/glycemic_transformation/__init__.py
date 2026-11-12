@@ -502,6 +502,11 @@ def glucose_pentagon(data, a1c=None):
     m = mean_glucose(data)
     sd = std_glucose(data)
     tar = time_in_given_above_range(data, th=160.) * 24 / 100  # hours
+
+    # The sampling time needs at least two samples
+    if data.t.values.size < 2:
+        return np.nan
+
     sample_time_minutes = data.t.diff().dt.total_seconds().dropna().iloc[0] / 60
     n_days = data.shape[0] * sample_time_minutes / 1440
     auc160 = positive_auc_glucose(data, 160.) / 1440 / n_days  # mg/dl*24h per day
@@ -592,6 +597,10 @@ def int_hypo(data):
 
     values = data.glucose.values[~np.isnan(data.glucose.values)]
     if values.size == 0:
+        return np.nan
+
+    # The sampling time needs at least two samples
+    if data.t.values.size < 2:
         return np.nan
 
     # Per-day AUC below 70 mg/dl [mg/dl*min] and time below 70 mg/dl [min], over the observed time

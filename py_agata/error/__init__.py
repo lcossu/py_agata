@@ -498,6 +498,10 @@ def time_delay(data, data_hat, ph):
     y = data.glucose.values[idxs]
     yp = data_hat.glucose.values[idxs]
 
+    # The sampling time needs at least two samples
+    if data.t.values.size < 2:
+        return np.nan
+
     t0 = pd.to_datetime(data.t.values[0]).to_pydatetime()
     t1 = pd.to_datetime(data.t.values[1]).to_pydatetime()
     sample_time = int((t1 - t0).total_seconds() / 60)
