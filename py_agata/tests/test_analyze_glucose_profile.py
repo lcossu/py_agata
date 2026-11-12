@@ -178,7 +178,7 @@ def test_analyze_glucose_profile():
     # Variability and transformation fields added in 0.1.0
     for k in ['gvp', 'mag', 'mad', 'ea1c', 'distance_traveled', 'li']:
         assert k in results['variability']
-    for k in ['q_score', 'gdi', 'int_hypo', 'hypo_rv']:
+    for k in ['q_score', 'gdi', 'int_hypo', 'hypo_rv', 'int_hyper', 'pgr']:
         assert k in results['glycemic_transformation']
 
     # Events fields

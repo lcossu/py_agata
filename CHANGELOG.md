@@ -6,20 +6,19 @@
 
 - `Agata` reports new metrics in all three entrypoints:
   - `variability`: `gvp`, `mag`, `mad`, `ea1c`, `distance_traveled`, `li`
-  - `glycemic_transformation`: `q_score`, `gdi`, `int_hypo`, `hypo_rv`
+  - `glycemic_transformation`: `q_score`, `gdi`, `int_hypo`, `hypo_rv`, `int_hyper`, `pgr`
   - `data_quality`: `number_days_at_least_data`
 - `variability`: `positive_auc_glucose`, `sample_entropy`, `multiscale_entropy`
 - `variability`: `glucodensity` (Matabuena 2021) and `glucodensity_distance` (2-Wasserstein distance between glucose distributions)
 - `variability`: `li` (Lability Index, Ryan 2004, CGM readings paired 60 min apart)
 - `visualization.plot_glucodensity`: glucodensity curves over the target range, analyzed profile in green and reference in black
 - `visualization.plot_lasagna`: mean glucose by time of day, one row per day or per profile, colored by AGP range
-- `glycemic_transformation`: `glucose_pentagon`
-- `risk`: `glycemic_risk_parameter`
+- `glycemic_transformation`: comprehensive glucose pentagon (Vigersky 2018) with `comprehensive_glucose_pentagon`, `cgp_axis_lengths` and `pgr` (prognostic glycemic risk), and `int_hyper`. Thresholds default to 70 and 180 mg/dl and can be overridden. `int_hypo` takes its threshold as a parameter
 - `error`: `dts_error_grid` (DTS Error Grid, Klonoff 2024)
 - `events` module: `after_meal_auc`, `meal_response_metrics` (peak searched in the 120 min after the meal), `tdi`
 - `inspection`: `number_days_at_least_data`
 - `processing`: `merge_additional_data`, `select_time_window`
-- `visualization` module: Plotly figures for glucose traces, events, CVGA, Poincaré, ROC histogram, LBGI/HBGI per hour, GRI, glucose pentagon, 3D glucose, Clarke and DTS error grids, dynamic risk
+- `visualization` module: Plotly figures for glucose traces, events, CVGA, Poincaré, ROC histogram, LBGI/HBGI per hour, GRI, comprehensive glucose pentagon, 3D glucose, Clarke and DTS error grids, dynamic risk
   - One shared style, with `width` and `height` parameters on every plot
 - `visualization.export_agp_pdf`: one-page AGP report (IDC AGP v5 layout, type 1 diabetes targets)
 - `visualization.agp_percentiles`: AGP percentile curves over the time of day, pooled across profiles
@@ -42,7 +41,7 @@
 
 ### Fixed
 
-- Profiles with a single sample no longer crash `Agata`. Metrics that need the sampling time return nan, event finders return no events, `impute_glucose` returns the data unchanged, and `plot_glucose_pentagon` raises `ValueError`
+- Profiles with a single sample no longer crash `Agata`. Metrics that need the sampling time return nan, event finders return no events, `impute_glucose` returns the data unchanged, and `plot_comprehensive_glucose_pentagon` raises `ValueError`
 - `li` returns nan with a warning when 60 min is not a multiple of the sampling time, so `Agata` no longer fails on such grids
 - `roc_histogram`, `plot_roc_histogram` and `plot_poincare` check for a homogeneous time grid, which their pairing of consecutive samples assumes
 - `risk.dynamic_risk` no longer prints a debug value on every call

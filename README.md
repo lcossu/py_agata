@@ -72,10 +72,10 @@ stats["risk"]["gri"]["p"]
 
 | Family | Metrics |
 |---|---|
-| `variability` | `mean_glucose`, `median_glucose`, `std_glucose`, `cv_glucose`, `range_glucose`, `iqr_glucose`, `auc_glucose`, `gmi`, `cogi`, `conga`, `j_index`, `mage_index`, `mage_plus_index`, `mage_minus_index`, `ef_index`, `modd`, `sddm_index`, `sdw_index`, `std_glucose_roc`, `cvga`, `gvp`, `mag`, `mad`, `ea1c`, `distance_traveled` |
+| `variability` | `mean_glucose`, `median_glucose`, `std_glucose`, `cv_glucose`, `range_glucose`, `iqr_glucose`, `auc_glucose`, `gmi`, `cogi`, `conga`, `j_index`, `mage_index`, `mage_plus_index`, `mage_minus_index`, `ef_index`, `modd`, `sddm_index`, `sdw_index`, `std_glucose_roc`, `cvga`, `gvp`, `mag`, `mad`, `ea1c`, `distance_traveled`, `li` |
 | `time_in_ranges` | `time_in_target`, `time_in_tight_target`, `time_in_hypoglycemia`, `time_in_l1_hypoglycemia`, `time_in_l2_hypoglycemia`, `time_in_hyperglycemia`, `time_in_l1_hyperglycemia`, `time_in_l2_hyperglycemia` |
 | `risk` | `adrr`, `lbgi`, `hbgi`, `bgri`, `gri` |
-| `glycemic_transformation` | `grade_score`, `grade_hypo_score`, `grade_hyper_score`, `grade_eu_score`, `igc`, `hypo_index`, `hyper_index`, `mr_index`, `q_score`, `gdi`, `int_hypo`, `hypo_rv` |
+| `glycemic_transformation` | `grade_score`, `grade_hypo_score`, `grade_hyper_score`, `grade_eu_score`, `igc`, `hypo_index`, `hyper_index`, `mr_index`, `q_score`, `gdi`, `int_hypo`, `hypo_rv`, `int_hyper`, `pgr` |
 | `events` | `hypoglycemic_events`, `hyperglycemic_events`, `extended_hypoglycemic_events` |
 | `data_quality` | `number_days_of_observation`, `missing_glucose_percentage`, `number_days_at_least_data` |
 
@@ -85,10 +85,10 @@ Every metric is also a plain function in the module of the same name, e.g. `from
 
 | Module | Functions |
 |---|---|
-| `variability` | `glucose_roc`, `auc_glucose_over_basal`, `positive_auc_glucose`, `sample_entropy`, `multiscale_entropy` |
+| `variability` | `glucose_roc`, `auc_glucose_over_basal`, `positive_auc_glucose`, `sample_entropy`, `multiscale_entropy`, `glucodensity`, `glucodensity_distance` |
 | `time_in_ranges` | `time_in_given_range`, `time_in_given_above_range`, `time_in_given_below_range` |
-| `risk` | `dynamic_risk`, `glycemic_risk_parameter` |
-| `glycemic_transformation` | `glucose_pentagon` |
+| `risk` | `dynamic_risk`, `gri_components` |
+| `glycemic_transformation` | `comprehensive_glucose_pentagon`, `cgp_axis_lengths` |
 | `inspection` | `find_nan_islands`, `find_hypoglycemic_events`, `find_hyperglycemic_events` |
 | `events` | `after_meal_auc`, `meal_response_metrics` (need a `cho` column), `tdi` (needs `bolus` and `basal` columns) |
 | `error` | `rmse`, `mard`, `cod`, `clarke`, `dts_error_grid`, `g_rmse`, `time_delay` (compare two traces) |
@@ -100,7 +100,7 @@ Every metric is also a plain function in the module of the same name, e.g. `from
 `py_agata.visualization` returns Plotly figures:
 
 - `plot_glucose`, `plot_glucose_events`, `plot_glucose_3d`
-- `plot_poincare`, `plot_roc_histogram`, `plot_lbgi_hbgi_hourly`, `plot_dynamic_risk`, `plot_meal_response`, `plot_glucose_pentagon`
+- `plot_poincare`, `plot_roc_histogram`, `plot_lbgi_hbgi_hourly`, `plot_dynamic_risk`, `plot_meal_response`, `plot_comprehensive_glucose_pentagon`, `plot_glucodensity`, `plot_lasagna`
 - `plot_cvga`, `plot_gri` (several profiles)
 - `plot_clarke_error_grid`, `plot_dts_error_grid` (return `(fig, percentages)`)
 

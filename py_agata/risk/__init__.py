@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 
-from py_agata.glycemic_transformation import glucose_pentagon
 from py_agata.time_in_ranges import time_in_l1_hypoglycemia, time_in_l2_hypoglycemia, time_in_l1_hyperglycemia, \
     time_in_l2_hyperglycemia
 from py_agata.input_validator import *
@@ -433,55 +432,3 @@ def dynamic_risk(data, amplification_function='tanh', maximum_amplification=2.5,
     elif amplification_function == 'exp':
         modulation_factor = np.exp(maximum_amplification * np.multiply(dr_over_dg, roc))
     return np.multiply(sr, modulation_factor)
-
-
-def glycemic_risk_parameter(data, a1c=None):
-    """
-    Computes the glycemic risk parameter (GRP) from the data
-    Parameters
-    ----------
-    data: pd.DataFrame
-        Pandas dataframe with a column `glucose` containing the glucose data
-        to analyze (in mg/dl)
-    a1c: float
-        HbA1c of the patient
-
-    Returns
-    -------
-    grp: GRP evaluated from the data with reference to the healthy subject
-
-    References
-    ----------
-    Thomas et al. "The “Glucose Pentagon”: Assessing Glycemic Control of Patients with Diabetes
-    Mellitus by a Model Integrating Different Parameters from Glucose Profiles" (2009) Diabetes Technology & Therapeutics,
-    11(6), 399–409. doi:10.1089/dia.2008.0119
-    """
-    check_dataframe(data)
-    check_data_columns(data)
-    check_homogeneous_timegrid(data)
-
-    m, sd, tar, auc160, a1c = glucose_pentagon(a1c)
-    area = _spider_plot_area([m, sd, tar, auc160, a1c]) / _spider_plot_area([90, 5.5, 10, 0, 0])
-    return area
-
-
-def _spider_plot_area(values):
-    """
-    Calculates the area of a spider plot, from its vertexes values
-    Parameters
-    ----------
-    values
-
-    Returns
-    -------
-
-    """
-    n = len(values)
-    import math
-    angles = [2 * math.pi * i / n for i in range(n)]
-    points = [(values[i] * math.cos(angles[i]), values[i] * math.sin(angles[i])) for i in range(n)]
-
-    area = 0.5 * abs(
-        sum(points[i][0] * points[(i + 1) % n][1] - points[(i + 1) % n][0] * points[i][1] for i in range(n)))
-
-    return area

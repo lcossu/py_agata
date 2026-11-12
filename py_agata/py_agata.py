@@ -180,6 +180,8 @@ class Agata:
         results['glycemic_transformation']['gdi'] = gdi(data)
         results['glycemic_transformation']['int_hypo'] = int_hypo(data)
         results['glycemic_transformation']['hypo_rv'] = hypo_rv(data)
+        results['glycemic_transformation']['int_hyper'] = int_hyper(data)
+        results['glycemic_transformation']['pgr'] = pgr(data)
 
         # Event metrics
         results['events'] = dict()
@@ -334,10 +336,10 @@ class Agata:
         results["glycemic_transformation"] = dict()
         metric_list = [grade_score, grade_hypo_score, grade_hyper_score,
                        grade_eu_score, igc, hypo_index,
-                       hyper_index, mr_index, q_score, gdi, int_hypo, hypo_rv]
+                       hyper_index, mr_index, q_score, gdi, int_hypo, hypo_rv, int_hyper, pgr]
         metric_list_name = ['grade_score', 'grade_hypo_score', 'grade_hyper_score',
                             'grade_eu_score', 'igc', 'hypo_index','hyper_index',
-                            'mr_index', 'q_score', 'gdi', 'int_hypo', 'hypo_rv']
+                            'mr_index', 'q_score', 'gdi', 'int_hypo', 'hypo_rv', 'int_hyper', 'pgr']
 
         for m in range(len(metric_list_name)):
             results["glycemic_transformation"][metric_list_name[m]] = dict()
@@ -611,7 +613,7 @@ class Agata:
         stats["glycemic_transformation"] = dict()
         metric_list_name = ['grade_score', 'grade_hypo_score', 'grade_hyper_score',
                                         'grade_eu_score', 'igc', 'hypo_index', 'hyper_index',
-                                        'mr_index', 'q_score', 'gdi', 'int_hypo', 'hypo_rv']
+                                        'mr_index', 'q_score', 'gdi', 'int_hypo', 'hypo_rv', 'int_hyper', 'pgr']
 
         for m in metric_list_name:
             r1 = results["arm_1"]["glycemic_transformation"][m]["values"]

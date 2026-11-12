@@ -134,7 +134,7 @@ def test_compare_two_arms():
     # Glycemic transformation
     metric_list_name = ['grade_score', 'grade_hypo_score', 'grade_hyper_score',
                             'grade_eu_score', 'igc', 'hypo_index','hyper_index',
-                            'mr_index', 'q_score', 'gdi', 'int_hypo', 'hypo_rv']
+                            'mr_index', 'q_score', 'gdi', 'int_hypo', 'hypo_rv', 'int_hyper', 'pgr']
     for m in metric_list_name:
         assert results['arm_1']["glycemic_transformation"][m]["values"].size == 4
         assert results['arm_2']["glycemic_transformation"][m]["values"].size == 4
@@ -232,7 +232,7 @@ def test_compare_two_arms():
     # Glycemic transformation
     metric_list_name = ['grade_score', 'grade_hypo_score', 'grade_hyper_score',
                             'grade_eu_score', 'igc', 'hypo_index','hyper_index',
-                            'mr_index', 'q_score', 'gdi', 'int_hypo', 'hypo_rv']
+                            'mr_index', 'q_score', 'gdi', 'int_hypo', 'hypo_rv', 'int_hyper', 'pgr']
     for m in metric_list_name:
         assert results['arm_1']["glycemic_transformation"][m]["values"].size == 5
         assert results['arm_2']["glycemic_transformation"][m]["values"].size == 4

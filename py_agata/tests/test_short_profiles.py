@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from py_agata.py_agata import Agata
-from py_agata.visualization import plot_glucose_pentagon
+from py_agata.visualization import plot_comprehensive_glucose_pentagon
 
 
 @pytest.fixture
@@ -28,4 +28,4 @@ def test_one_sample_profile_runs_through_agata(one_sample):
 
 def test_one_sample_pentagon_plot_raises(one_sample):
     with pytest.raises(ValueError, match='two samples'):
-        plot_glucose_pentagon(one_sample)
+        plot_comprehensive_glucose_pentagon(one_sample)

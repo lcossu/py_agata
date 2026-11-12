@@ -10,7 +10,7 @@ from plotly.graph_objs import Scatter, Scatter3d, Scatterpolar, Bar, Heatmap, Fi
 from plotly.subplots import make_subplots
 
 from py_agata.error import clarke, dts_error_grid, _DTS_BORDERS
-from py_agata.glycemic_transformation import glucose_pentagon
+from py_agata.glycemic_transformation import CGP_AXES, CGP_HEALTHY, cgp_axis_lengths, comprehensive_glucose_pentagon, pgr
 from py_agata.input_validator import check_dataframe, check_data_columns, check_homogeneous_timegrid
 from py_agata.risk import lbgi, hbgi, gri, gri_components, dynamic_risk
 from py_agata.events import meal_response_metrics
@@ -143,16 +143,19 @@ def _glucose_figure(data, above, below, width, height, panels=()) -> Figure:
     return fig
 
 
-def plot_glucose_pentagon(data, a1c=None, width=600, height=550) -> Figure:
+def plot_comprehensive_glucose_pentagon(data, th_l=70., th_h=180., width=600, height=550) -> Figure:
     """
-    Plots the glucose pentagon of the given data against the healthy reference.
+    Plots the comprehensive glucose pentagon (CGP) of the given data against the healthy reference, with the axes
+    scaled as in Vigersky et al. (2018) and the prognostic glycemic risk (PGR) in the title.
 
     Parameters
     ----------
     data: pd.DataFrame
         Pandas dataframe with columns `t` and `glucose` (in mg/dl).
-    a1c: float, optional, default: None
-        HbA1c of the patient (in %). If None, it is estimated from the data.
+    th_l: float, optional, default: 70
+        Lower bound of the target range and hypoglycemia threshold (in mg/dl).
+    th_h: float, optional, default: 180
+        Upper bound of the target range and hyperglycemia threshold (in mg/dl).
     width: int or None, optional, default: 600
         Figure width in pixels. None fills the container.
     height: int or None, optional, default: 550
@@ -162,48 +165,46 @@ def plot_glucose_pentagon(data, a1c=None, width=600, height=550) -> Figure:
     -------
     fig: plotly.graph_objs.Figure
 
+    Raises
+    ------
+    ValueError
+        If the data has no glucose values or fewer than two samples.
+
     References
     ----------
-    Thomas et al. "The “Glucose Pentagon”: Assessing Glycemic Control of Patients with Diabetes Mellitus by a Model
-    Integrating Different Parameters from Glucose Profiles." (2009). Diabetes Technology & Therapeutics, 11(6),
-    399–409. doi:10.1089/dia.2008.0119
+    Vigersky et al. "The Comprehensive Glucose Pentagon: A Glucose-Centric Composite Metric for Assessing Glycemic
+    Control in Persons With Diabetes." J Diabetes Sci Technol. 2018;12(1):114-123. doi:10.1177/1932296817718561
     """
-    pentagon = glucose_pentagon(data, a1c)
-    if np.isscalar(pentagon):
-        raise ValueError('The glucose pentagon needs at least two samples with glucose values.')
-    values = np.asarray(pentagon, dtype=float)
+    cgp = comprehensive_glucose_pentagon(data, th_l, th_h)
+    if np.isnan(cgp['mean_glucose']):
+        raise ValueError('The comprehensive glucose pentagon needs at least two samples with glucose values.')
 
-    # Axis name, unit, value range and healthy reference
-    names = ['Mean', 'SD', 'Time >160', 'AUC >160', 'HbA1c']
-    units = ['mg/dL', 'mg/dL', 'h/day', 'mg/dL·day', '%']
-    min_vals = np.array([40, 0, 0, 0, 5.5])
-    max_vals = np.array([310, 100, 24, 150, 12])
-    healthy = np.array([90, 10, 0, 0, 5.5])
+    names = ['Time out of range', 'CV', 'IntHypo', 'IntHyper', 'Mean']
+    units = ['min/day', '%', 'mg/dL·min', 'mg/dL·min', 'mg/dL']
+    values = [cgp[k] for k in CGP_AXES]
 
-    # Offset by 0.1 so the healthy minimum is still visible
-    def scale(v):
-        r = (v - min_vals) / (max_vals - min_vals) + .1
-        return np.append(r, r[0])
+    # Axis lengths in mm, closed back to the first axis
+    def closed(v):
+        return np.append(v, v[0])
 
-    theta = [f'{n}<br><b>{v:.1f}</b> {u}' for n, v, u in zip(names, values, units)]
-    theta.append(theta[0])
-    hover = [f'{n}: {v:.1f} {u} (range {lo}-{hi})' for n, v, u, lo, hi in zip(names, values, units, min_vals, max_vals)]
-    hover.append(hover[0])
+    theta = [f'{n}<br><b>{v:.0f}</b> {u}' for n, v, u in zip(names, values, units)]
+    hover = [f'{n}: {v:.1f} {u}' for n, v, u in zip(names, values, units)]
 
     fig = Figure()
-    fig.add_trace(Scatterpolar(r=scale(healthy), theta=theta, mode='lines', name='Healthy reference',
-                               line=dict(color=REFERENCE_COLOR, width=1.5, dash='dash'), hoverinfo='skip'))
-    fig.add_trace(Scatterpolar(r=scale(values), theta=theta, mode='lines+markers', name='Data', fill='toself',
-                               fillcolor='rgba(70,130,180,0.25)', line=dict(color=CGM_COLOR, width=2),
-                               marker=dict(size=7), text=hover, hoverinfo='text'))
+    fig.add_trace(Scatterpolar(r=closed(cgp_axis_lengths(CGP_HEALTHY)), theta=closed(theta), mode='lines',
+                               name='Healthy reference', line=dict(color=REFERENCE_COLOR, width=1.5, dash='dash'),
+                               hoverinfo='skip'))
+    fig.add_trace(Scatterpolar(r=closed(cgp_axis_lengths(cgp)), theta=closed(theta), mode='lines+markers', name='Data',
+                               fill='toself', fillcolor='rgba(70,130,180,0.25)', line=dict(color=CGM_COLOR, width=2),
+                               marker=dict(size=7), text=closed(hover), hoverinfo='text'))
 
-    _style(fig, None, width, height)
+    _style(fig, f'PGR = {pgr(data, th_l, th_h):.2f}', width, height)
     fig.update_layout(
-        polar=dict(radialaxis=dict(range=[0, 1.1], showticklabels=False, ticks='', showline=False,
+        polar=dict(radialaxis=dict(range=[0, 76], showticklabels=False, ticks='', showline=False,
                                    gridcolor=GRID_COLOR),
                    angularaxis=dict(direction='clockwise', rotation=90, gridcolor=GRID_COLOR, ticks='')),
         legend=dict(orientation='h', x=0.5, xanchor='center', y=-0.08),
-        margin=dict(l=90, r=90, t=50, b=50),
+        margin=dict(l=90, r=90, t=70, b=50),
     )
     return fig
 

@@ -9,10 +9,10 @@ from datetime import timedelta
 
 from py_agata.inspection import find_hypoglycemic_events
 from py_agata.time_in_ranges import time_in_target, time_in_hypoglycemia, time_in_hyperglycemia, \
-    time_in_given_above_range
+    time_in_given_above_range, time_in_given_below_range, time_in_given_range
 from py_agata.input_validator import *
 from py_agata.utils import to_mmol_l
-from py_agata.variability import mean_glucose, modd, std_glucose, positive_auc_glucose, ea1c
+from py_agata.variability import mean_glucose, modd, std_glucose, cv_glucose, positive_auc_glucose
 
 
 def mr_index(data, r=100):
@@ -470,53 +470,6 @@ def q_score(data):
     return 8 + (mbg - 7.8) / 1.7 + (rng - 7.5) / 2.9 + (tbr - 0.6) / 1.2 + (tar - 6.2) / 5.7 + (mdd - 1.8) / 0.9
 
 
-def glucose_pentagon(data, a1c=None):
-    """
-       Computes the components of the glucose pentagon
-       Parameters
-       ----------
-       data: pd.DataFrame
-           Pandas dataframe with a column `glucose` containing the glucose data
-           to analyze (in mg/dl)
-       a1c: float
-           HbA1c of the patient
-
-       Returns
-       -------
-       m, sd, tar, auc160, a1c: various parameters of the glucose pentagon
-
-       References
-       ----------
-       Thomas et al. "The “Glucose Pentagon”: Assessing Glycemic Control of Patients with Diabetes
-       Mellitus by a Model Integrating Different Parameters from Glucose Profiles" (2009) Diabetes Technology & Therapeutics,
-       11(6), 399–409. doi:10.1089/dia.2008.0119
-       """
-    check_dataframe(data)
-    check_data_columns(data)
-    check_homogeneous_timegrid(data)
-
-    values = data.glucose.values[~np.isnan(data.glucose.values)]
-    if values.size == 0:
-        return np.nan
-
-    m = mean_glucose(data)
-    sd = std_glucose(data)
-    tar = time_in_given_above_range(data, th=160.) * 24 / 100  # hours
-
-    # The sampling time needs at least two samples
-    if data.t.values.size < 2:
-        return np.nan
-
-    sample_time_minutes = data.t.diff().dt.total_seconds().dropna().iloc[0] / 60
-    n_days = data.shape[0] * sample_time_minutes / 1440
-    auc160 = positive_auc_glucose(data, 160.) / 1440 / n_days  # mg/dl*24h per day
-    if a1c == None:
-        warnings.warn("The A1C value was not provided, proceeding by estimating it from the data.")
-        a1c = ea1c(data)
-
-    return m, sd, tar, auc160, a1c
-
-
 def gdi(data):
     """
        Computes the Glucose deviation index
@@ -571,14 +524,17 @@ def gdi(data):
     return g * mgip + (1 - g) * sdgi
 
 
-def int_hypo(data):
+def int_hypo(data, th=70.):
     """
-      Computes the IntHypo value from the data
+      Computes the intensity of hypoglycemia (IntHypo), the length of the vector of the per-day AUC below `th`
+      (in mg/dl*min) and the per-day time below `th` (in min).
       Parameters
       ----------
       data: pd.DataFrame
           Pandas dataframe with a column `glucose` containing the glucose data
           to analyze (in mg/dl)
+      th: float, optional, default: 70
+          Hypoglycemia threshold (in mg/dl).
 
       Returns
       -------
@@ -603,13 +559,165 @@ def int_hypo(data):
     if data.t.values.size < 2:
         return np.nan
 
-    # Per-day AUC below 70 mg/dl [mg/dl*min] and time below 70 mg/dl [min], over the observed time
+    # Per-day AUC below th [mg/dl*min] and time below th [min], over the observed time
     sample_time_minutes = data.t.diff().dt.total_seconds().dropna().iloc[0] / 60
     observed_days = values.size * sample_time_minutes / 1440
-    auc = positive_auc_glucose(data.assign(glucose=-data.glucose), -70) / observed_days
-    min_hypo = time_in_hypoglycemia(data) / 100 * 1440
+    auc = positive_auc_glucose(data.assign(glucose=-data.glucose), -float(th)) / observed_days
+    min_hypo = time_in_given_below_range(data, th) / 100 * 1440
 
     return math.sqrt(auc ** 2 + min_hypo ** 2)
+
+
+def int_hyper(data, th=180.):
+    """
+    Computes the intensity of hyperglycemia (IntHyper), the length of the vector of the per-day AUC above `th`
+    (in mg/dl*min) and the per-day time above `th` (in min).
+
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Pandas dataframe with a column `glucose` containing the glucose data
+        to analyze (in mg/dl)
+    th: float, optional, default: 180
+        Hyperglycemia threshold (in mg/dl).
+
+    Returns
+    -------
+    int_hyper: float
+        IntHyper. It is nan without glucose values or with fewer than two samples.
+
+    References
+    ----------
+    Vigersky et al. "The Comprehensive Glucose Pentagon: A Glucose-Centric Composite Metric for Assessing Glycemic
+    Control in Persons With Diabetes." J Diabetes Sci Technol. 2018;12(1):114-123. doi:10.1177/1932296817718561
+    """
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
+    values = data.glucose.values[~np.isnan(data.glucose.values)]
+    if values.size == 0 or data.t.values.size < 2:
+        return np.nan
+
+    # Per-day AUC above th [mg/dl*min] and time above th [min], over the observed time
+    sample_time_minutes = data.t.diff().dt.total_seconds().dropna().iloc[0] / 60
+    observed_days = values.size * sample_time_minutes / 1440
+    auc = positive_auc_glucose(data, float(th)) / observed_days
+    min_hyper = time_in_given_above_range(data, th) / 100 * 1440
+
+    return math.sqrt(auc ** 2 + min_hyper ** 2)
+
+
+# Axes of the comprehensive glucose pentagon, clockwise from the top as in Vigersky et al. (2018), Figure 1
+CGP_AXES = ['time_out_of_range', 'cv_glucose', 'int_hypo', 'int_hyper', 'mean_glucose']
+
+# Healthy reference of Vigersky et al. (2018). CV 17% instead of 16.7% gives exactly the 466 mm^2 the paper reports
+CGP_HEALTHY = {'time_out_of_range': 0., 'cv_glucose': 17., 'int_hypo': 0., 'int_hyper': 0., 'mean_glucose': 90.}
+
+
+def comprehensive_glucose_pentagon(data, th_l=70., th_h=180.):
+    """
+    Computes the five axes of the comprehensive glucose pentagon (CGP).
+
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Pandas dataframe with a column `glucose` containing the glucose data
+        to analyze (in mg/dl)
+    th_l: float, optional, default: 70
+        Lower bound of the target range and hypoglycemia threshold (in mg/dl).
+    th_h: float, optional, default: 180
+        Upper bound of the target range and hyperglycemia threshold (in mg/dl).
+
+    Returns
+    -------
+    cgp: dict
+        Keys of `CGP_AXES`: time out of range (1440 min minus the per-day time in [th_l, th_h], in min),
+        CV (in %), IntHypo, IntHyper and mean glucose (in mg/dl). Values are nan without glucose values or with
+        fewer than two samples.
+
+    References
+    ----------
+    Vigersky et al. "The Comprehensive Glucose Pentagon: A Glucose-Centric Composite Metric for Assessing Glycemic
+    Control in Persons With Diabetes." J Diabetes Sci Technol. 2018;12(1):114-123. doi:10.1177/1932296817718561
+    """
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
+    values = data.glucose.values[~np.isnan(data.glucose.values)]
+    if values.size == 0 or data.t.values.size < 2:
+        return {k: np.nan for k in CGP_AXES}
+
+    tir = time_in_given_range(data, th_l, th_h, include_th_l=True, include_th_h=True)
+    return {
+        'time_out_of_range': (100 - tir) / 100 * 1440,
+        'cv_glucose': cv_glucose(data),
+        'int_hypo': int_hypo(data, th_l),
+        'int_hyper': int_hyper(data, th_h),
+        'mean_glucose': mean_glucose(data),
+    }
+
+
+def cgp_axis_lengths(cgp):
+    """
+    Converts the CGP axes to their lengths (in mm, out of 76) with the scaling formulae of Vigersky et al. (2018).
+    Mean glucose below 90 mg/dl keeps the 14 mm of the healthy reference.
+
+    Parameters
+    ----------
+    cgp: dict
+        CGP axes, as returned by `comprehensive_glucose_pentagon`.
+
+    Returns
+    -------
+    lengths: np.ndarray
+        Axis lengths in the order of `CGP_AXES`.
+    """
+    return np.array([
+        (cgp['time_out_of_range'] * 0.00614) ** 1.581 + 14,
+        (cgp['cv_glucose'] - 17) * 0.92 + 14,
+        np.exp(cgp['int_hypo'] * 0.00057) + 13,
+        (cgp['int_hyper'] * 0.000115) ** 1.51 + 14,
+        (max(cgp['mean_glucose'] - 90, 0) * 0.0217) ** 2.63 + 14,
+    ])
+
+
+def _pentagon_area(lengths):
+    # Sum of the five 72-degree triangles between adjacent axes
+    return 0.5 * np.sin(np.radians(72)) * np.sum(lengths * np.roll(lengths, -1))
+
+
+def pgr(data, th_l=70., th_h=180.):
+    """
+    Computes the prognostic glycemic risk (PGR), the area of the comprehensive glucose pentagon divided by the area
+    of the healthy reference (466 mm^2). Vigersky et al. (2018) read it as very low risk up to 2, low up to 3,
+    moderate up to 4, high up to 4.5 and extremely high above.
+
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Pandas dataframe with a column `glucose` containing the glucose data
+        to analyze (in mg/dl)
+    th_l: float, optional, default: 70
+        Lower bound of the target range and hypoglycemia threshold (in mg/dl).
+    th_h: float, optional, default: 180
+        Upper bound of the target range and hyperglycemia threshold (in mg/dl).
+
+    Returns
+    -------
+    pgr: float
+        The PGR. It is nan without glucose values or with fewer than two samples.
+
+    References
+    ----------
+    Vigersky et al. "The Comprehensive Glucose Pentagon: A Glucose-Centric Composite Metric for Assessing Glycemic
+    Control in Persons With Diabetes." J Diabetes Sci Technol. 2018;12(1):114-123. doi:10.1177/1932296817718561
+    """
+    cgp = comprehensive_glucose_pentagon(data, th_l, th_h)
+    if np.isnan(cgp['mean_glucose']):
+        return np.nan
+    return _pentagon_area(cgp_axis_lengths(cgp)) / _pentagon_area(cgp_axis_lengths(CGP_HEALTHY))
 
 def hypo_rv(data):
     """
