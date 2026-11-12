@@ -102,7 +102,7 @@ def test_compare_two_arms():
                         'iqr_glucose',
                         'auc_glucose', 'gmi', 'cogi', 'conga', 'j_index', 'mage_index', 'mage_minus_index',
                         'mage_plus_index',
-                        'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga', 'gvp', 'mag', 'mad', 'ea1c', 'distance_traveled']
+                        'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga', 'gvp', 'mag', 'mad', 'ea1c', 'distance_traveled', 'li']
     for m in metric_list_name:
         assert results['arm_1']["variability"][m]["values"].size == 4
         assert results['arm_2']["variability"][m]["values"].size == 4
@@ -200,7 +200,7 @@ def test_compare_two_arms():
                         'iqr_glucose',
                         'auc_glucose', 'gmi', 'cogi', 'conga', 'j_index', 'mage_index', 'mage_minus_index',
                         'mage_plus_index',
-                        'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga', 'gvp', 'mag', 'mad', 'ea1c', 'distance_traveled']
+                        'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga', 'gvp', 'mag', 'mad', 'ea1c', 'distance_traveled', 'li']
     for m in metric_list_name:
         assert results['arm_1']["variability"][m]["values"].size == 5
         assert results['arm_2']["variability"][m]["values"].size == 4

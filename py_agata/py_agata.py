@@ -145,6 +145,7 @@ class Agata:
         results['variability']['mad'] = mad(data)
         results['variability']['ea1c'] = ea1c(data)
         results['variability']['distance_traveled'] = distance_traveled(data)
+        results['variability']['li'] = li(data)
 
         # Get time metrics
         results['time_in_ranges'] = dict()
@@ -253,13 +254,13 @@ class Agata:
         metric_list = [mean_glucose, median_glucose, std_glucose, cv_glucose, range_glucose, iqr_glucose,
                        auc_glucose, gmi, cogi, conga, j_index, mage_index, mage_minus_index, mage_plus_index,
                        ef_index, modd, sddm_index, sdw_index, std_glucose_roc, _cvga_best_control_zone,
-                       gvp, mag, mad, ea1c, distance_traveled]
+                       gvp, mag, mad, ea1c, distance_traveled, li]
         metric_list_name = ['mean_glucose', 'median_glucose', 'std_glucose', 'cv_glucose', 'range_glucose',
                             'iqr_glucose',
                             'auc_glucose', 'gmi', 'cogi', 'conga', 'j_index', 'mage_index', 'mage_minus_index',
                             'mage_plus_index',
                             'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga',
-                            'gvp', 'mag', 'mad', 'ea1c', 'distance_traveled']
+                            'gvp', 'mag', 'mad', 'ea1c', 'distance_traveled', 'li']
 
         for m in range(len(metric_list_name)):
             results["variability"][metric_list_name[m]] = dict()
@@ -577,7 +578,7 @@ class Agata:
                             'auc_glucose', 'gmi', 'cogi', 'conga', 'j_index', 'mage_index', 'mage_minus_index',
                             'mage_plus_index',
                             'ef_index', 'modd', 'sddm_index', 'sdw_index', 'std_glucose_roc', 'cvga',
-                            'gvp', 'mag', 'mad', 'ea1c', 'distance_traveled']
+                            'gvp', 'mag', 'mad', 'ea1c', 'distance_traveled', 'li']
 
         for m in metric_list_name:
             r1 = results["arm_1"]["variability"][m]["values"]

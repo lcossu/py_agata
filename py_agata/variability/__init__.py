@@ -2,7 +2,7 @@ from __future__ import annotations
 import warnings
 import numpy as np
 import pandas as pd
-from scipy.stats import iqr
+from scipy.stats import iqr, gaussian_kde
 from scipy.signal import find_peaks
 from datetime import timedelta
 
@@ -1804,3 +1804,176 @@ def multiscale_entropy(data, m=2, r=0.15, max_scale=20):
     return np.nanmean(mse_values)
 
 
+
+
+def glucodensity(data, grid=None, bw_method=None):
+    """
+    Computes the glucodensity, the probability density of the glucose values estimated with a Gaussian kernel.
+    It is the continuous counterpart of the time in ranges and describes the share of time spent at each
+    glucose concentration.
+
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Pandas dataframe with a column `glucose` containing the glucose data
+        to analyze (in mg/dl)
+    grid: np.ndarray, optional, default: None
+        Glucose values (in mg/dl) where the density is evaluated. None uses 40 to 400 mg/dl in 1 mg/dl steps.
+    bw_method: str, float or None, optional, default: None
+        Kernel bandwidth, passed to `scipy.stats.gaussian_kde`. None uses Scott's rule.
+
+    Returns
+    -------
+    glucodensity: pd.DataFrame
+        Columns `glucose` (mg/dl) and `density` (1/(mg/dl)). The density is nan when fewer than two distinct
+        glucose values are available.
+
+    Raises
+    ------
+    None
+
+    See Also
+    --------
+    glucodensity_distance
+
+    Examples
+    --------
+    None
+
+    References
+    ----------
+    Matabuena et al., "Glucodensities: a new representation of glucose profiles using distributional data
+    analysis", Statistical Methods in Medical Research, 2021, vol. 30, pp. 1445-1464.
+    DOI: 10.1177/0962280221998064.
+    """
+    # Check input
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
+    grid = np.arange(40., 401.) if grid is None else np.asarray(grid, dtype=float)
+    values = data.glucose.values[~np.isnan(data.glucose.values)]
+
+    # The kernel estimate is singular on constant data
+    if np.unique(values).size < 2:
+        return pd.DataFrame({'glucose': grid, 'density': np.nan})
+
+    return pd.DataFrame({'glucose': grid, 'density': gaussian_kde(values, bw_method=bw_method)(grid)})
+
+
+def glucodensity_distance(data_1, data_2, n_quantiles=1000):
+    """
+    Computes the 2-Wasserstein distance between the glucose distributions of two profiles, the distance used to
+    compare glucodensities. Two profiles that differ by a constant shift of c mg/dl are c mg/dl apart.
+
+    Parameters
+    ----------
+    data_1: pd.DataFrame
+        Pandas dataframe with a column `glucose` containing the glucose data
+        to analyze (in mg/dl)
+    data_2: pd.DataFrame
+        Pandas dataframe with a column `glucose` containing the glucose data
+        to analyze (in mg/dl)
+    n_quantiles: int, optional, default: 1000
+        Number of quantile levels used to approximate the quantile functions.
+
+    Returns
+    -------
+    glucodensity_distance: float
+        The 2-Wasserstein distance (in mg/dl). It is nan when either profile has no glucose values.
+
+    Raises
+    ------
+    None
+
+    See Also
+    --------
+    glucodensity
+
+    Examples
+    --------
+    None
+
+    References
+    ----------
+    Matabuena et al., "Glucodensities: a new representation of glucose profiles using distributional data
+    analysis", Statistical Methods in Medical Research, 2021, vol. 30, pp. 1445-1464.
+    DOI: 10.1177/0962280221998064.
+    """
+    # Check input
+    for data in (data_1, data_2):
+        check_dataframe(data)
+        check_data_columns(data)
+        check_homogeneous_timegrid(data)
+
+    values_1 = data_1.glucose.values[~np.isnan(data_1.glucose.values)]
+    values_2 = data_2.glucose.values[~np.isnan(data_2.glucose.values)]
+    if values_1.size == 0 or values_2.size == 0:
+        return np.nan
+
+    # The 1D 2-Wasserstein distance is the L2 distance between the quantile functions
+    levels = (np.arange(n_quantiles) + 0.5) / n_quantiles
+    return np.sqrt(np.mean((np.quantile(values_1, levels) - np.quantile(values_2, levels)) ** 2))
+
+
+def li(data, interval=60):
+    """
+    Computes the Lability Index (LI), the sum of the squared glucose changes divided by the time between readings,
+    expressed per week. Readings `interval` minutes apart are paired, and the weekly scaling uses the time covered
+    by the valid pairs, so gaps do not lower the index.
+
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Pandas dataframe with a column `glucose` containing the glucose data
+        to analyze (in mg/dl)
+    interval: int, optional, default: 60
+        Time between paired readings (in minutes). It must be a multiple of the sampling time.
+
+    Returns
+    -------
+    li: float
+        The Lability Index (in (mmol/l)^2/h/week). The thresholds of Ryan et al. come from fingerstick data
+        taken 1 to 12 h apart and do not apply to CGM data paired at short intervals.
+
+    Raises
+    ------
+    ValueError
+        If `interval` is not a multiple of the sampling time.
+
+    See Also
+    --------
+    None
+
+    Examples
+    --------
+    None
+
+    References
+    ----------
+    Ryan et al., "Assessment of the severity of hypoglycemia and glycemic lability in type 1 diabetic subjects
+    undergoing islet transplantation", Diabetes, 2004, vol. 53, pp. 955-962. DOI: 10.2337/diabetes.53.4.955.
+    """
+    # Check input
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+    if len(data) < 2:
+        return np.nan
+
+    ts = (pd.to_datetime(data.t.values[1]) - pd.to_datetime(data.t.values[0])).total_seconds() / 60
+    step = interval / ts
+    if step < 1 or step != int(step):
+        raise ValueError('li: `interval` must be a multiple of the sampling time.')
+    step = int(step)
+
+    # All pairs of readings `interval` apart, in mmol/l
+    g = data.glucose.values / 18.018
+    d = g[step:] - g[:-step]
+    d = d[~np.isnan(d)]
+    if d.size == 0:
+        return np.nan
+
+    # sum(d^2 / h) over n pairs, divided by the n * h / 168 weeks they cover
+    h = interval / 60
+    return 168 * np.mean(d ** 2) / h ** 2

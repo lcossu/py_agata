@@ -5,10 +5,14 @@
 ### Added
 
 - `Agata` reports new metrics in all three entrypoints:
-  - `variability`: `gvp`, `mag`, `mad`, `ea1c`, `distance_traveled`
+  - `variability`: `gvp`, `mag`, `mad`, `ea1c`, `distance_traveled`, `li`
   - `glycemic_transformation`: `q_score`, `gdi`, `int_hypo`, `hypo_rv`
   - `data_quality`: `number_days_at_least_data`
 - `variability`: `positive_auc_glucose`, `sample_entropy`, `multiscale_entropy`
+- `variability`: `glucodensity` (Matabuena 2021) and `glucodensity_distance` (2-Wasserstein distance between glucose distributions)
+- `variability`: `li` (Lability Index, Ryan 2004, CGM readings paired 60 min apart)
+- `visualization.plot_glucodensity`: glucodensity curves over the target range, analyzed profile in green and reference in black
+- `visualization.plot_lasagna`: mean glucose by time of day, one row per day or per profile, colored by AGP range
 - `glycemic_transformation`: `glucose_pentagon`
 - `risk`: `glycemic_risk_parameter`
 - `error`: `dts_error_grid` (DTS Error Grid, Klonoff 2024)

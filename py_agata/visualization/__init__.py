@@ -6,7 +6,7 @@ from matplotlib.patches import Rectangle
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import pandas as pd
-from plotly.graph_objs import Scatter, Scatter3d, Scatterpolar, Bar, Figure
+from plotly.graph_objs import Scatter, Scatter3d, Scatterpolar, Bar, Heatmap, Figure
 from plotly.subplots import make_subplots
 
 from py_agata.error import clarke, dts_error_grid, _DTS_BORDERS
@@ -18,11 +18,12 @@ from py_agata.inspection import missing_glucose_percentage
 from py_agata.time_in_ranges import time_in_target, time_in_hypoglycemia, time_in_hyperglycemia, \
     time_in_l1_hypoglycemia, time_in_l2_hypoglycemia, time_in_l1_hyperglycemia, time_in_l2_hyperglycemia, \
     time_in_tight_target
-from py_agata.variability import mean_glucose, median_glucose, std_glucose, cv_glucose, gmi
+from py_agata.variability import mean_glucose, median_glucose, std_glucose, cv_glucose, gmi, glucodensity
 
-# Trace colors: glucose data, reference or baseline, and the hypo/hyper thresholds
+# Trace colors: glucose data, reference or baseline, analyzed method, and the hypo/hyper thresholds
 CGM_COLOR = 'steelblue'
 REFERENCE_COLOR = 'black'
+ANALYZED_COLOR = 'green'
 HYPO_COLOR = 'firebrick'
 HYPER_COLOR = 'goldenrod'
 
@@ -1234,3 +1235,133 @@ def export_agp_pdf(glucose_profiles, file_path: str = 'agp_report.pdf',
         pdf.savefig(fig)
     plt.close(fig)
     return output_path
+
+
+def plot_lasagna(glucose_profiles, bin_minutes=60, labels=None, width=900, height=450) -> Figure:
+    """
+    Plots the lasagna plot, a heat map of the mean glucose by time of day. One profile gives one row per day,
+    and a list of profiles gives one row per profile, averaged across its days. Colors follow the AGP ranges.
+
+    Parameters
+    ----------
+    glucose_profiles : pd.DataFrame or list of pd.DataFrame
+        One glucose profile or a list of glucose profiles. Each dataframe must contain
+        columns `t` and `glucose` (in mg/dl) and have a homogeneous time grid.
+    bin_minutes : int, optional, default: 60
+        Width of the time-of-day bins in minutes.
+    labels : list of str, optional, default: None
+        Row names for a list of profiles. None uses `Profile 1`, `Profile 2`, ...
+    width: int or None, optional, default: 900
+        Figure width in pixels. None fills the container.
+    height: int or None, optional, default: 450
+        Figure height in pixels. None fills the container.
+
+    Returns
+    -------
+    fig: plotly.graph_objs.Figure
+
+    References
+    ----------
+    Swihart et al., "Lasagna plots: a saucy alternative to spaghetti plots", Epidemiology, 2010, vol. 21,
+    pp. 621-625. DOI: 10.1097/EDE.0b013e3181e5b06a.
+    """
+    by_day = isinstance(glucose_profiles, pd.DataFrame)
+    profiles = [glucose_profiles] if by_day else glucose_profiles
+    if labels is None:
+        labels = [f'Profile {i + 1}' for i in range(len(profiles))]
+    if len(labels) != len(profiles):
+        raise ValueError('`labels` must have one entry per profile.')
+
+    bins = np.arange(0, 1440, bin_minutes)
+    rows = []
+    for d in profiles:
+        df = _prepare_agp_dataframe(d)
+        df['bin'] = (df['minute_of_day'] // bin_minutes) * bin_minutes
+        if by_day:
+            means = df.groupby(['day', 'bin'])['glucose'].mean().unstack()
+        else:
+            means = df.groupby('bin')['glucose'].mean().to_frame().T
+        rows.append(means.reindex(columns=bins))
+    z = pd.concat(rows)
+    y = [day.strftime('%d %b') for day in z.index] if by_day else labels
+
+    # Hard color steps at the AGP thresholds, over a 40 to 400 mg/dL scale
+    edges = [40., *_AGP_THRESHOLDS.values(), 400.]
+    colors = [_AGP_COLORS[k] for k in ['very_low', 'low', 'target', 'high', 'very_high']]
+    scale = []
+    for lo, hi, color in zip(edges[:-1], edges[1:], colors):
+        scale += [[(lo - 40) / 360, color], [(hi - 40) / 360, color]]
+
+    # Cells are centered on their bins, in hours of the day
+    x = (bins + bin_minutes / 2) / 60
+    fig = Figure(Heatmap(z=z.values, x=x, y=y, zmin=40, zmax=400, colorscale=scale, xgap=1, ygap=1,
+                         colorbar=dict(title='mg/dL', tickvals=edges),
+                         hovertemplate='%{y}, hour %{x:.1f}<br>%{z:.0f} mg/dL<extra></extra>'))
+
+    _style(fig, 'Lasagna plot', width, height)
+    fig.update_xaxes(title_text='Time of day', showgrid=False, range=[0, 24], tickvals=list(range(0, 25, 3)),
+                     ticktext=[f'{h:02d}:00' for h in range(0, 25, 3)])
+    fig.update_yaxes(title_text='Day' if by_day else None, showgrid=False, autorange='reversed')
+    return fig
+
+
+def plot_glucodensity(glucose_profiles, labels=None, colors=None, above=180, below=70, width=700,
+                      height=450) -> Figure:
+    """
+    Plots the glucodensity of one or more profiles over the target range. One profile is drawn in the CGM
+    color. Two profiles are drawn as analyzed (first) and reference (second). More profiles need `colors`.
+
+    Parameters
+    ----------
+    glucose_profiles : pd.DataFrame or list of pd.DataFrame
+        One glucose profile or a list of glucose profiles. Each dataframe must contain
+        columns `t` and `glucose` (in mg/dl) and have a homogeneous time grid.
+    labels : list of str, optional, default: None
+        Legend names, one per profile. None uses `Profile 1`, `Profile 2`, ...
+    colors : list of str, optional, default: None
+        Line colors, one per profile. Required for more than two profiles.
+    above: float, optional, default: 180
+        Upper threshold of the target range (in mg/dl).
+    below: float, optional, default: 70
+        Lower threshold of the target range (in mg/dl).
+    width: int or None, optional, default: 700
+        Figure width in pixels. None fills the container.
+    height: int or None, optional, default: 450
+        Figure height in pixels. None fills the container.
+
+    Returns
+    -------
+    fig: plotly.graph_objs.Figure
+
+    References
+    ----------
+    Matabuena et al., "Glucodensities: a new representation of glucose profiles using distributional data
+    analysis", Statistical Methods in Medical Research, 2021, vol. 30, pp. 1445-1464.
+    DOI: 10.1177/0962280221998064.
+    """
+    single = isinstance(glucose_profiles, pd.DataFrame)
+    profiles = [glucose_profiles] if single else glucose_profiles
+    if labels is None:
+        labels = [f'Profile {i + 1}' for i in range(len(profiles))]
+    if colors is None:
+        if len(profiles) > 2:
+            raise ValueError('`colors` is required for more than two profiles.')
+        colors = [CGM_COLOR] if len(profiles) == 1 else [ANALYZED_COLOR, REFERENCE_COLOR]
+    if len(labels) != len(profiles) or len(colors) != len(profiles):
+        raise ValueError('`labels` and `colors` must have one entry per profile.')
+
+    fig = Figure()
+    for d, label, color in zip(profiles, labels, colors):
+        gd = glucodensity(d)
+        fig.add_trace(Scatter(x=gd['glucose'], y=gd['density'], mode='lines', name=label,
+                              line=dict(color=color, width=2), showlegend=not single,
+                              hovertemplate='%{x:.0f} mg/dL<br>%{y:.4f}<extra>' + label + '</extra>'))
+
+    fig.add_vrect(x0=below, x1=above, fillcolor='rgba(184,225,134,0.25)', line_width=0, layer='below')
+    fig.add_vline(x=below, line=dict(color=HYPO_COLOR, width=1.5, dash='dash'))
+    fig.add_vline(x=above, line=dict(color=HYPER_COLOR, width=1.5, dash='dash'))
+
+    _style(fig, 'Glucodensity', width, height)
+    fig.update_xaxes(title_text='Glucose [mg/dL]', range=[40, 400])
+    fig.update_yaxes(title_text='Density [1/(mg/dL)]', rangemode='tozero')
+    return fig
