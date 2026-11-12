@@ -1933,13 +1933,13 @@ def li(data, interval=60):
     Returns
     -------
     li: float
-        The Lability Index (in (mmol/l)^2/h/week). The thresholds of Ryan et al. come from fingerstick data
-        taken 1 to 12 h apart and do not apply to CGM data paired at short intervals.
+        The Lability Index (in (mmol/l)^2/h/week). It is nan, with a warning, when `interval` is not a multiple
+        of the sampling time. The thresholds of Ryan et al. come from fingerstick data taken 1 to 12 h apart and
+        do not apply to CGM data paired at short intervals.
 
     Raises
     ------
-    ValueError
-        If `interval` is not a multiple of the sampling time.
+    None
 
     See Also
     --------
@@ -1964,7 +1964,8 @@ def li(data, interval=60):
     ts = (pd.to_datetime(data.t.values[1]) - pd.to_datetime(data.t.values[0])).total_seconds() / 60
     step = interval / ts
     if step < 1 or step != int(step):
-        raise ValueError('li: `interval` must be a multiple of the sampling time.')
+        warnings.warn(f'li: `interval` ({interval} min) is not a multiple of the sampling time ({ts:g} min).')
+        return np.nan
     step = int(step)
 
     # All pairs of readings `interval` apart, in mmol/l

@@ -15,8 +15,8 @@ def test_li():
     assert abs(li(make_glucose_df(values)) - 168) < 1e-9
     assert abs(li(make_glucose_df(100 + 18.018 * np.arange(10)), interval=5) - 168 * 144) < 1e-6
     assert li(make_glucose_df([120.] * 30)) == 0
-    with pytest.raises(ValueError):
-        li(make_glucose_df([120.] * 30), interval=7)
+    with pytest.warns(UserWarning):
+        assert np.isnan(li(make_glucose_df([120.] * 30), interval=7))
 
 
 def test_li_empty():

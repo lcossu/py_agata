@@ -26,3 +26,15 @@ def test_roc_histogram_matches_plot():
 
     bar = plot_roc_histogram(data).data[0]
     assert list(bar.y) == list(hist['count'])
+
+
+def test_roc_histogram_requires_homogeneous_grid():
+    import pytest
+    from py_agata.visualization import roc_histogram, plot_poincare
+
+    t = pd.to_datetime(['2024-01-01 00:00', '2024-01-01 00:05', '2024-01-01 00:15'])
+    data = pd.DataFrame({'t': t, 'glucose': [100., 105., 110.]})
+    with pytest.raises(Exception, match='homogeneous'):
+        roc_histogram(data)
+    with pytest.raises(Exception, match='homogeneous'):
+        plot_poincare(data)

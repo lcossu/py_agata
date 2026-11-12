@@ -42,6 +42,8 @@
 
 ### Fixed
 
+- `li` returns nan with a warning when 60 min is not a multiple of the sampling time, so `Agata` no longer fails on such grids
+- `roc_histogram`, `plot_roc_histogram` and `plot_poincare` check for a homogeneous time grid, which their pairing of consecutive samples assumes
 - `risk.dynamic_risk` no longer prints a debug value on every call
 - `sample_entropy` and `multiscale_entropy` compare windows with numpy instead of a pairwise Python loop. On 13 days of 5-minute data, `sample_entropy` drops from 73 s to 0.2 s, with identical values.
 - `detrend_glucose`, `impute_glucose` and `retime_glucose` returned unmodified data under pandas 3 (chained assignment).

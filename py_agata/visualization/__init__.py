@@ -444,6 +444,7 @@ def roc_histogram(data, bin_width=0.25) -> pd.DataFrame:
     """
     check_dataframe(data)
     check_data_columns(data)
+    check_homogeneous_timegrid(data)
 
     ts = (pd.to_datetime(data.t.values[1]) - pd.to_datetime(data.t.values[0])).total_seconds() / 60
     roc = np.diff(data.glucose.values) / ts
@@ -574,6 +575,10 @@ def plot_poincare(data, font_size=14, width=600, height=600):
     plotly.graph_objs.Figure
         Plotly figure object containing the Poincaré plot.
     """
+    check_dataframe(data)
+    check_data_columns(data)
+    check_homogeneous_timegrid(data)
+
     glucose = data['glucose'].values
     x = glucose[:-1]
     y = glucose[1:]
